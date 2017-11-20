@@ -11,19 +11,22 @@ namespace Mandelbrot
     class Program
     {
         static int maxit = 100;
-        static Color[] colors = new Color[maxit + 1];
+        static byte[] colors = new byte[(maxit + 1) * 3];
         static void Main(string[] args)
         {
 
             for (int i = 0; i < maxit + 1; i++)
             {
-                colors[i] = GetLinearGradient(i, 0, maxit,
+                Color c = GetLinearGradient(i, 0, maxit,
                     new Color[] { Color.DarkGray, Color.DarkGray, Color.Black, Color.DarkRed, Color.Red, Color.DarkRed, Color.Black },
-                    new double[] { 0.6,1,3,3,3,0.5 });
+                    new double[] { 1,1,3,3,3,0.5 });
+                colors[i * 3 + 0] = c.R;
+                colors[i * 3 + 1] = c.G;
+                colors[i * 3 + 2] = c.B;
             }
 
             int resy = 2000;
-            int resx = (int)(resy * 16.0/9.0);
+            int resx = 2000;
             string file = "lol.ppm";
 
 
@@ -33,13 +36,12 @@ namespace Mandelbrot
 
             writer.Write(("P6\n" + resx + " " + resy + "\n255\n").ToCharArray().Select(c => (byte)c).ToArray());
 
-            int cunch = 10;
-            byte[] buff = new byte[resy / cunch * resx * 3];
-            for (int i = 0; i < cunch; i++)
-            {
-                draw_lines(resy / cunch * i, resy / cunch * (i + 1), buff, resx, resy);
+
+            byte[] buff = new byte[resy * resx * 3];
+
+            Mandelbrot.GetMandelbrotRegion(-3, 3, -3, 3, buff, resx, resy, maxit, colors);
                 writer.Write(buff);
-            }
+            
 
 
 
@@ -53,40 +55,7 @@ namespace Mandelbrot
 
             writer.Close();
         }
-        static int iterate(double cx, double cy)
-        {
-            double x = 0.0, y = 0.0, xx;
-            int it;
-            for (it = 0; (it < maxit) && (x * x + y * y < 2 * 2); it++)
-            {
-                xx = x * x - y * y + cx;
-                y = 2.0 * x * y + cy;
-                x = xx;
-            }
-            return it;
-        }
-
         
-        static void draw_lines(int ystart, int yend, byte[] buffer, int xsize, int ysize)
-        {
-
-            Parallel.For(ystart, yend, delegate(int y)
-            //for (int y = ystart; y < yend; y++)
-            {
-                if (y % 100 == 0)
-                    Console.WriteLine("drawing " + y + " line");
-                for (int x = 0; x < xsize; x++)
-                {
-                    double cx = -2.5 + 5 * ((double)x) / (xsize - 1);
-                    double cy = 1.2 - 2.4 * ((double)y) / (ysize - 1);
-                    int v = iterate(cx, cy);
-
-                    buffer[((y - ystart) * xsize + x) * 3 + 0] = (byte)(colors[v].R);
-                    buffer[((y - ystart) * xsize + x) * 3 + 1] = (byte)(colors[v].G);
-                    buffer[((y - ystart) * xsize + x) * 3 + 2] = (byte)(colors[v].B);
-                }
-            });
-        }
 
         static Color GetLinearGradient(double v, double minV, double maxV, Color[] colors, double[] range)
         {

@@ -1,7 +1,8 @@
 ﻿using System;
 
-namespace MandelbrotView
+namespace Mandelbrot_View
 {
+#if WINDOWS || LINUX
     /// <summary>
     /// The main class.
     /// </summary>
@@ -17,4 +18,5 @@ namespace MandelbrotView
                 game.Run();
         }
     }
+#endif
 }

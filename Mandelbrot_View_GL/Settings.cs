@@ -11,6 +11,8 @@ namespace Mandelbrot_View_GL
     {
         public int ResolutionX { get; set; }
         public int ResolutionY { get; set; }
+        public int RenderResolutionX { get; set; }
+        public int RenderResolutionY { get; set; }
         public bool FullScreen { get; set; }
 
         public int SplitY { get; set; }

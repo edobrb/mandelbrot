@@ -7,6 +7,8 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Mandelbrot_View
 {
@@ -21,13 +23,24 @@ namespace Mandelbrot_View
         int maxiter = 100;
 
         uint[] colors;
+        uint[] buffer;
         bool toUpdate;
-        double x, y, viewport;
 
-        Texture2D screen, whitePixel;
+        readonly object locker = new object();
+        double x, y, viewport;
+        double rendered_x, rendered_y, rendered_viewport;
+
+        Texture2D screen, whitePixel, backScreen;
         Settings settings;
-        MandelbrotGPU gpu;
+        MandelbrotMultiGPU gpu;
         SpriteFont font;
+
+        double maxiter_def = 100;
+        KeyboardState oldkey;
+        MouseState oldmouse;
+        bool showInfo = false;
+        TimeSpan renderTime = TimeSpan.FromSeconds(1);
+        string screenshotFile = "none";
         public Game1()
         {
             if (File.Exists("settings.json"))
@@ -37,17 +50,7 @@ namespace Mandelbrot_View
             }
             else
             {
-                settings = new Settings()
-                {
-                    ResolutionX = 1920 / 2,
-                    ResolutionY = 1080 / 2,
-                    SplitY = 2,
-                    FullScreen = false,
-                    Colors = new List<MyColor>(new MyColor[] { MyColor.DarkGray, MyColor.DarkGray, MyColor.Black,
-                        MyColor.Red, MyColor.DarkRed, MyColor.Black }),
-                    Weight = new List<double>(new double[] { 1, 1, 1, 1, 1 }),
-                    OpenCL_DeviceID = 2,
-                };
+                throw new Exception("Configuration file not found");
             }
 
 
@@ -58,7 +61,7 @@ namespace Mandelbrot_View
             this.graphics.PreferredBackBufferHeight = settings.ResolutionY;
             this.TargetElapsedTime = TimeSpan.FromSeconds(1.0 / 60.0);
             this.graphics.IsFullScreen = settings.FullScreen;
-
+            this.IsMouseVisible = true;
 
         }
 
@@ -66,8 +69,8 @@ namespace Mandelbrot_View
         protected override void Initialize()
         {
             toUpdate = true;
-            x = -1;
-            y = 0;
+            x = 0.261750402076009;
+            y = 0.0020502675513626;
             viewport = 1.15;
 
 
@@ -77,18 +80,41 @@ namespace Mandelbrot_View
         protected override void LoadContent()
         {
             spriteBatch = new SpriteBatch(GraphicsDevice);
-            screen = new Texture2D(this.GraphicsDevice, settings.ResolutionX, settings.ResolutionY, false, SurfaceFormat.Color);
-            gpu = new MandelbrotGPU(settings.OpenCL_DeviceID, settings.ResolutionX, settings.ResolutionY, settings.SplitY);
+            screen = new Texture2D(this.GraphicsDevice, settings.RenderResolutionX, settings.RenderResolutionY, false, SurfaceFormat.Color);
+            backScreen = new Texture2D(this.GraphicsDevice, settings.ResolutionX, settings.ResolutionY);
+
+            Color g1 = new Color((byte)148, 148, 148);
+            Color g2 = new Color((byte)100, 100, 100);
+            Color[] gridColor = new Color[settings.ResolutionX * settings.ResolutionY];
+
+            for (int y = 0; y < settings.ResolutionY / 8; y++)
+            {
+                for (int x = 0; x < settings.ResolutionX / 8; x++)
+                {
+                    for (int x1 = 0; x1 < 8; x1++)
+                        for (int y1 = 0; y1 < 8; y1++)
+                            gridColor[(y * 8 + y1) * settings.ResolutionX + (x * 8 + x1)] = y % 2 == 0 ? (x % 2 == 0 ? g1 : g2) : (x % 2 == 0 ? g2 : g1);
+                }
+            }
+            backScreen.SetData<Color>(gridColor);
+
+            //gpu = new MandelbrotGPU(settings.OpenCL_DeviceID, settings.RenderResolutionX, settings.RenderResolutionY , settings.SplitY, buffer, 0);
+            gpu = new MandelbrotMultiGPU(settings.Devices_OpenCL_ID.ToArray(),
+                settings.Devices_SplitX.ToArray(),
+                settings.Devices_PortionY.ToArray(),
+                settings.RenderResolutionX, settings.RenderResolutionY);
             RefreshMaxIter();
             font = Content.Load<SpriteFont>("font");
             whitePixel = new Texture2D(GraphicsDevice, 1, 1);
             whitePixel.SetData<byte>(new byte[] { 255, 255, 255, 255 });
+
+
+
         }
 
 
-        double maxiter_def = 100;
-        KeyboardState oldkey;
-        private void RecalcColor()
+
+        private void RecalcColor(int maxiter)
         {
             colors = new uint[maxiter + 1];
             for (int i = 0; i < maxiter + 1; i++)
@@ -108,11 +134,13 @@ namespace Mandelbrot_View
             {
                 maxiter = (int)maxiter_def;
             }
-            RecalcColor();
         }
+
+
         private void Input(GameTime gameTime)
         {
             KeyboardState key = Keyboard.GetState();
+            MouseState mouse = Mouse.GetState();
             double zoom_perc_sec = 1.25;
             double move_perc_sec = 2;
             double maxiter_perc_sec = 0.25;
@@ -120,19 +148,22 @@ namespace Mandelbrot_View
             if (key.IsKeyDown(Keys.W))
             {
                 viewport -= viewport * zoom_perc_sec * gameTime.ElapsedGameTime.TotalSeconds;
-                RefreshMaxIter();
                 toUpdate = true;
+                RefreshMaxIter();
             }
             if (key.IsKeyDown(Keys.S))
             {
                 viewport += viewport * zoom_perc_sec * gameTime.ElapsedGameTime.TotalSeconds;
-                RefreshMaxIter();
                 toUpdate = true;
+                RefreshMaxIter();
             }
-
             if (key.IsKeyDown(Keys.Left))
             {
                 x -= viewport * move_perc_sec * gameTime.ElapsedGameTime.TotalSeconds;
+                toUpdate = true;
+            }
+            if (key.IsKeyUp(Keys.Left) && oldkey.IsKeyDown(Keys.Left))
+            {
                 toUpdate = true;
             }
             if (key.IsKeyDown(Keys.Right))
@@ -150,21 +181,19 @@ namespace Mandelbrot_View
                 y += viewport * move_perc_sec * gameTime.ElapsedGameTime.TotalSeconds;
                 toUpdate = true;
             }
-
             if (key.IsKeyDown(Keys.M))
             {
                 maxiter_def += maxiter_def * maxiter_perc_sec * gameTime.ElapsedGameTime.TotalSeconds;
-                RefreshMaxIter();
                 toUpdate = true;
+                RefreshMaxIter();
             }
             if (key.IsKeyDown(Keys.N))
             {
                 maxiter_def -= maxiter_def * maxiter_perc_sec * gameTime.ElapsedGameTime.TotalSeconds;
                 if (maxiter_def < 10) maxiter_def = 10;
-                RefreshMaxIter();
                 toUpdate = true;
+                RefreshMaxIter();
             }
-
             if (key.IsKeyDown(Keys.F11) && oldkey.IsKeyUp(Keys.F11))
             {
                 graphics.ToggleFullScreen();
@@ -181,44 +210,130 @@ namespace Mandelbrot_View
                 {
                     offset++;
                 }
+                screenshotFile = (Directory.GetFiles("screenshot").Length + offset) + ".png";
                 Stream stream = File.Open("screenshot\\" + (Directory.GetFiles("screenshot").Length + offset) + ".png", FileMode.Create);
                 screen.SaveAsPng(stream, settings.ResolutionX * 2, settings.ResolutionY * 2);
                 stream.Close();
+
+            }
+            if (mouse.LeftButton == ButtonState.Pressed && oldmouse.LeftButton == ButtonState.Released)
+            {
+                if (mouse.X >= 0 && mouse.X <= settings.ResolutionX && mouse.Y >= 0 && mouse.Y <= settings.ResolutionY)
+                {
+                    double vx = viewport * settings.RenderResolutionX / settings.RenderResolutionY;
+
+                    double xm = ((double)mouse.X * 2) / settings.ResolutionX - 1;
+                    double ym = ((double)mouse.Y * 2) / settings.ResolutionY - 1;
+
+
+                    x += xm * vx;
+                    y += ym * viewport;
+                    toUpdate = true;
+                }
+            }
+
+            if(toUpdate /*&& key.IsKeyUp(Keys.W)
+                 && key.IsKeyUp(Keys.S)
+                  && key.IsKeyUp(Keys.Left)
+                   && key.IsKeyUp(Keys.Right)
+                    && key.IsKeyUp(Keys.Down)
+                     && key.IsKeyUp(Keys.Up)
+                      && key.IsKeyUp(Keys.M)
+                  && key.IsKeyUp(Keys.N)*/)
+            {
+                toUpdate = false;
+                input_changed = true;
             }
             oldkey = key;
+            oldmouse = mouse;
         }
 
-        bool showInfo = false;
+        bool rendering = false;
+        private void Render()
+        {
+            RecalcColor(maxiter_copy);
+            DateTime start = DateTime.Now;
+            double vx = viewport * settings.RenderResolutionX / settings.RenderResolutionY;
+            buffer = gpu.GetArea(x - vx, x + vx, y - viewport, y + viewport, maxiter_copy);
+            lock (locker)
+            {
+                screen.SetData<uint>(buffer);
+                rendered_x = x_copy;
+                rendered_y = y_copy;
+                rendered_viewport = viewport_copy;
+            }
+            renderTime = DateTime.Now - start;
+
+
+
+
+            rendering = false;
+        }
+        protected override void OnExiting(object sender, EventArgs args)
+        {
+            th.Join();
+            gpu.Close();
+        }
+        Thread th;
+        bool input_changed = false;
+        double x_copy, y_copy, viewport_copy;
+        int maxiter_copy;
         protected override void Draw(GameTime gameTime)
         {
             Input(gameTime);
-            if (toUpdate)
+            if (input_changed && !rendering)
             {
-                toUpdate = false;
-
-                double vx = viewport * settings.ResolutionX / settings.ResolutionY;
-                uint[] data = gpu.GetArea(x - vx, x + vx, y - viewport, y + viewport, maxiter);
-                screen.SetData<uint>(data);
+                maxiter_copy = maxiter;
+                x_copy = x;
+                y_copy = y;
+                viewport_copy = viewport;
+                rendering = true;
+                input_changed = false;
+                th = new Thread(Render);
+                th.Start();
             }
 
 
-
-            GraphicsDevice.Clear(Color.Black);
-            spriteBatch.Begin();
-            var r = new Rectangle(0, 0, settings.ResolutionX, settings.ResolutionY);
-            spriteBatch.Draw(screen, r, Color.White);
-
-            if (showInfo)
+            lock (locker)
             {
-                r = new Rectangle(0, 0, 240, 80);
-                spriteBatch.Draw(whitePixel, r, Color.White);
-                spriteBatch.DrawString(font, "X: " + x, new Vector2(0, 0), Color.Black);
-                spriteBatch.DrawString(font, "Y: " + y, new Vector2(0, 20), Color.Black);
-                spriteBatch.DrawString(font, "Viewport: " + viewport, new Vector2(0, 40), Color.Black);
-                spriteBatch.DrawString(font, "Maxiter: " + maxiter, new Vector2(0, 60), Color.Black);
+                GraphicsDevice.Clear(Color.Black);
+                spriteBatch.Begin();
+                var r = new Rectangle(0, 0, settings.ResolutionX, settings.ResolutionY);
+
+                spriteBatch.Draw(backScreen, r, Color.White);
+
+
+
+                double vx = viewport * settings.RenderResolutionX / settings.RenderResolutionY;
+                double pixel_value = rendered_viewport / settings.RenderResolutionY;
+
+                double center_x = (settings.RenderResolutionX / 2.0) + (x - rendered_x) / pixel_value / 2.0;
+                double center_y = (settings.RenderResolutionY / 2.0) + (y - rendered_y) / pixel_value / 2.0;
+                double vieport_scale = viewport / rendered_viewport;
+
+                var source_rect = new Rectangle(
+                    (int)(center_x - vieport_scale * settings.RenderResolutionX / 2.0),
+                    (int)(center_y - vieport_scale * settings.RenderResolutionY / 2.0),
+                    (int)(vieport_scale * settings.RenderResolutionX),
+                    (int)(vieport_scale * settings.RenderResolutionY)
+                    );
+
+                spriteBatch.Draw(screen, r, source_rect, Color.White);
+
+                if (showInfo)
+                {
+                    r = new Rectangle(0, 0, 265, 125);
+                    spriteBatch.Draw(whitePixel, r, Color.Silver);
+                    spriteBatch.DrawString(font, "X: " + x, new Vector2(5, 5), Color.Black);
+                    spriteBatch.DrawString(font, "Y: " + y, new Vector2(5, 25), Color.Black);
+                    spriteBatch.DrawString(font, "Viewport: " + viewport, new Vector2(5, 45), Color.Black);
+                    spriteBatch.DrawString(font, "Maxiter: " + maxiter, new Vector2(5, 65), Color.Black);
+                    spriteBatch.DrawString(font, "Fps: " + Math.Round(1.0 / renderTime.TotalSeconds, 2), new Vector2(5, 85), Color.Black);
+                    spriteBatch.DrawString(font, "Last screenshot: " + screenshotFile, new Vector2(5, 105), Color.Black);
+                }
+                spriteBatch.End();
+                base.Draw(gameTime);
             }
-            spriteBatch.End();
-            base.Draw(gameTime);
         }
     }
 }

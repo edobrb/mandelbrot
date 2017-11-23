@@ -61,12 +61,12 @@ namespace Mandelbrot_Generator
             return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
         }
 
-        public static uint[] GetMandelbrotRegionGPUSplittedY(MandelbrotGPU gpu, double x, double y, double viewport, int maxiter, int res_x, int res_y, int split_y, int y_index)
+        public static void UpdateMandelbrotRegionGPUSplittedY(MandelbrotGPU gpu, double x, double y, double viewport, int maxiter, int res_x, int res_y, int split_y, int y_index)
         {
             double vx = viewport * res_x / res_y;
             double y_size = viewport * 2 / split_y;
 
-            return gpu.GetArea(
+            gpu.UpdateArea(
                 x - vx,
                 x + vx,
                 y - viewport + y_size * (y_index + 0),

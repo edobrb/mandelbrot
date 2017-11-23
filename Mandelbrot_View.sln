@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mandelbrot_View", "Mandelbr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mandelbrot_Generator", "Mandelbrot_Generator\Mandelbrot_Generator.csproj", "{0ED7CC1B-38D2-4DE9-B191-06B2C876B377}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mandelbrot_View_GL", "Mandelbrot_View_GL\Mandelbrot_View_GL.csproj", "{D2959358-689E-4A66-B0A3-A227B3DB173C}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,14 +29,6 @@ Global
 		{0ED7CC1B-38D2-4DE9-B191-06B2C876B377}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0ED7CC1B-38D2-4DE9-B191-06B2C876B377}.Release|x86.ActiveCfg = Release|Any CPU
 		{0ED7CC1B-38D2-4DE9-B191-06B2C876B377}.Release|x86.Build.0 = Release|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Debug|x86.Build.0 = Debug|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Release|x86.ActiveCfg = Release|Any CPU
-		{D2959358-689E-4A66-B0A3-A227B3DB173C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

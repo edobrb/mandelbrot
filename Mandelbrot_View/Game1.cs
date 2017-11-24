@@ -20,7 +20,7 @@ namespace Mandelbrot_View
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
 
-        int maxiter = 100;
+        int maxiter;
 
         uint[] colors;
         uint[] buffer;
@@ -35,7 +35,7 @@ namespace Mandelbrot_View
         MandelbrotMultiGPU gpu;
         SpriteFont font;
 
-        double maxiter_def = 100;
+        double maxiter_def;
         KeyboardState oldkey;
         MouseState oldmouse;
         bool showInfo = false;
@@ -69,10 +69,16 @@ namespace Mandelbrot_View
         protected override void Initialize()
         {
             toUpdate = true;
+            
             x = 0.261750402076009;
             y = 0.0020502675513626;
             viewport = 1.15;
-
+            maxiter_def = 100;
+            /*
+            x = 0.261750341770215;
+            y = 0.00205035528290217;
+            viewport = 1.66 * Math.Pow(10,-12);
+            maxiter_def = 30000;*/
 
             oldkey = Keyboard.GetState();
             base.Initialize();
@@ -126,7 +132,7 @@ namespace Mandelbrot_View
         }
         private void RefreshMaxIter()
         {
-            if (settings.MaxiterMode == "dynamic")
+            if (settings.MaxiterMode == MaxiterMode.Dynamic)
             {
                 maxiter = (int)(Math.Sqrt(2 * Math.Sqrt(Math.Abs(1 - Math.Sqrt(5 * settings.ResolutionX / viewport)))) * (maxiter_def / 10));
             }
@@ -232,18 +238,25 @@ namespace Mandelbrot_View
                 }
             }
 
-            if(toUpdate /*&& key.IsKeyUp(Keys.W)
-                 && key.IsKeyUp(Keys.S)
-                  && key.IsKeyUp(Keys.Left)
-                   && key.IsKeyUp(Keys.Right)
-                    && key.IsKeyUp(Keys.Down)
-                     && key.IsKeyUp(Keys.Up)
-                      && key.IsKeyUp(Keys.M)
-                  && key.IsKeyUp(Keys.N)*/)
+            if (settings.RenderMode == RenderMode.Fluid || settings.RenderMode == RenderMode.Forced)
             {
-                toUpdate = false;
-                input_changed = true;
+                if (toUpdate)
+                {
+                    toUpdate = false;
+                    input_changed = true;
+                }
             }
+            else if (settings.RenderMode == RenderMode.Manual)
+            {
+                if (key.IsKeyDown(Keys.Enter) && oldkey.IsKeyUp(Keys.Enter))
+                {
+                    input_changed = true;
+                }
+            }
+
+
+
+
             oldkey = key;
             oldmouse = mouse;
         }
@@ -271,7 +284,8 @@ namespace Mandelbrot_View
         }
         protected override void OnExiting(object sender, EventArgs args)
         {
-            th.Join();
+            if (th != null)
+                th.Join();
             gpu.Close();
         }
         Thread th;
@@ -281,17 +295,34 @@ namespace Mandelbrot_View
         protected override void Draw(GameTime gameTime)
         {
             Input(gameTime);
-            if (input_changed && !rendering)
+            if (settings.RenderMode == RenderMode.Forced)
             {
-                maxiter_copy = maxiter;
-                x_copy = x;
-                y_copy = y;
-                viewport_copy = viewport;
-                rendering = true;
-                input_changed = false;
-                th = new Thread(Render);
-                th.Start();
+                if (input_changed && !rendering)
+                {
+                    maxiter_copy = maxiter;
+                    x_copy = x;
+                    y_copy = y;
+                    viewport_copy = viewport;
+                    rendering = true;
+                    input_changed = false;
+                    Render();
+                }
             }
+            else
+            {
+                if (input_changed && !rendering)
+                {
+                    maxiter_copy = maxiter;
+                    x_copy = x;
+                    y_copy = y;
+                    viewport_copy = viewport;
+                    rendering = true;
+                    input_changed = false;
+                    th = new Thread(Render);
+                    th.Start();
+                }
+            }
+
 
 
             lock (locker)
@@ -328,7 +359,7 @@ namespace Mandelbrot_View
                     spriteBatch.DrawString(font, "Y: " + y, new Vector2(5, 25), Color.Black);
                     spriteBatch.DrawString(font, "Viewport: " + viewport, new Vector2(5, 45), Color.Black);
                     spriteBatch.DrawString(font, "Maxiter: " + maxiter, new Vector2(5, 65), Color.Black);
-                    spriteBatch.DrawString(font, "Fps: " + Math.Round(1.0 / renderTime.TotalSeconds, 2), new Vector2(5, 85), Color.Black);
+                    spriteBatch.DrawString(font, "Fps: " + Math.Round(1.0 / renderTime.TotalSeconds, 3), new Vector2(5, 85), Color.Black);
                     spriteBatch.DrawString(font, "Last screenshot: " + screenshotFile, new Vector2(5, 105), Color.Black);
                 }
                 spriteBatch.End();

@@ -1,0 +1,35 @@
+{
+  "InitialCenterX" :       0.261750402076009,
+  "InitialCenterY" :       0.0020502675513626,
+  "InitialViewportSizeY" : 1.15,
+  "InitialMaxIter" :       200,
+  
+  
+  "ResolutionX":       1920,
+  "ResolutionY":       1080,
+  "RenderResolutionX": 3840,
+  "RenderResolutionY": 2160,
+  "FullScreen":        true,
+  
+  
+  "MaxiterMode": "Static",
+  "RenderMode":  "Manual",
+  
+  
+  "Devices_OpenCL_ID":  [ 2 ],
+  "Devices_SplitX":     [ 4 ],
+  "Maxiter_Per_Step":   [ 64 ],
+  "Devices_PortionY":   [ 1 ],
+  
+  
+  "Colors": [
+    { "A": 255, "R":  69, "G":  69, "B":  69 },
+    { "A": 255, "R": 169, "G": 169, "B": 169 },
+    { "A": 255, "R":   0, "G":   0, "B":   0 },
+    { "A": 255, "R": 255, "G":   0, "B":   0 },
+    { "A": 255, "R": 139, "G":   0, "B":   0 },
+    { "A": 255, "R":   0, "G":   0, "B":   0 },
+  ],
+  "Weight":           [ 1.0, 1.0, 1.0, 1.0, 1.0 ],
+  "GradientFunction": "ln(x * 9 + 1) / ln(10)",
+}

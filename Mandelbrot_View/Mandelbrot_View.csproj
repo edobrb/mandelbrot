@@ -68,6 +68,9 @@
     <None Include="app.manifest" />
     <None Include="Content\font.spritefont" />
     <None Include="packages.config" />
+    <None Include="settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Mandelbrot_Generator\Mandelbrot_Generator.csproj">

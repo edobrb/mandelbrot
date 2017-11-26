@@ -9,15 +9,15 @@ namespace Mandelbrot_Generator
 {
     public class MandelbrotMultiGPU
     {
-        MandelbrotGPU1[] gpus;
+        MandelbrotGPU[] gpus;
         uint[] buffer;
         int[] portions_y;
 
-        public MandelbrotMultiGPU(int[] device_id, int[] split_x, int[] portions_y, int res_x, int res_y)
+        public MandelbrotMultiGPU(int[] device_id, int[] split_x, int[] maxiter_per_step, int[] portions_y, int res_x, int res_y)
         {
             this.portions_y = portions_y;
             buffer = new uint[res_x * res_y];
-            gpus = new MandelbrotGPU1[device_id.Length];
+            gpus = new MandelbrotGPU[device_id.Length];
             for (int i = 0; i < gpus.Length; i++)
             {
                 int real_res_y = res_y * portions_y[i] / portions_y.Sum();
@@ -26,7 +26,7 @@ namespace Mandelbrot_Generator
                 for (int k = 0; k < i; k++)
                     startY += res_y * portions_y[k] / portions_y.Sum();
 
-                gpus[i] = new MandelbrotGPU1(device_id[i], res_x, real_res_y, split_x[i], buffer, res_x * startY);
+                gpus[i] = new MandelbrotGPU(device_id[i], res_x, real_res_y, split_x[i], buffer, res_x * startY, maxiter_per_step[i]);
             }
         }
 
@@ -50,7 +50,7 @@ namespace Mandelbrot_Generator
 
 
                     gpus[my_i].UpdateArea(x0, x1, y0_gpu, y1_gpu, max_iter);
-                    gpus[my_i].Syncronize();
+                    
                 });
             }
             for (int i = 0; i < gpus.Length; i++)
@@ -60,6 +60,7 @@ namespace Mandelbrot_Generator
             for (int i = 0; i < gpus.Length; i++)
             {
                 tasks[i].Join();
+                gpus[i].Syncronize();
             }
 
             return buffer;

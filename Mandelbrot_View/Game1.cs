@@ -69,16 +69,11 @@ namespace Mandelbrot_View
         protected override void Initialize()
         {
             toUpdate = true;
-            
-            x = 0.261750402076009;
-            y = 0.0020502675513626;
-            viewport = 1.15;
-            maxiter_def = 100;
-            /*
-            x = 0.261750341770215;
-            y = 0.00205035528290217;
-            viewport = 1.66 * Math.Pow(10,-12);
-            maxiter_def = 30000;*/
+
+            x = settings.InitialCenterX;
+            y = settings.InitialCenterY;
+            viewport = settings.InitialViewportSizeY;
+            maxiter_def = settings.InitialMaxIter;
 
             oldkey = Keyboard.GetState();
             base.Initialize();
@@ -87,35 +82,33 @@ namespace Mandelbrot_View
         {
             spriteBatch = new SpriteBatch(GraphicsDevice);
             screen = new Texture2D(this.GraphicsDevice, settings.RenderResolutionX, settings.RenderResolutionY, false, SurfaceFormat.Color);
-            backScreen = new Texture2D(this.GraphicsDevice, settings.ResolutionX, settings.ResolutionY);
-
-            Color g1 = new Color((byte)148, 148, 148);
-            Color g2 = new Color((byte)100, 100, 100);
-            Color[] gridColor = new Color[settings.ResolutionX * settings.ResolutionY];
-
-            for (int y = 0; y < settings.ResolutionY / 8; y++)
-            {
-                for (int x = 0; x < settings.ResolutionX / 8; x++)
-                {
-                    for (int x1 = 0; x1 < 8; x1++)
-                        for (int y1 = 0; y1 < 8; y1++)
-                            gridColor[(y * 8 + y1) * settings.ResolutionX + (x * 8 + x1)] = y % 2 == 0 ? (x % 2 == 0 ? g1 : g2) : (x % 2 == 0 ? g2 : g1);
-                }
-            }
-            backScreen.SetData<Color>(gridColor);
-
-            //gpu = new MandelbrotGPU(settings.OpenCL_DeviceID, settings.RenderResolutionX, settings.RenderResolutionY , settings.SplitY, buffer, 0);
-            gpu = new MandelbrotMultiGPU(settings.Devices_OpenCL_ID.ToArray(),
-                settings.Devices_SplitX.ToArray(),
-                settings.Devices_PortionY.ToArray(),
-                settings.RenderResolutionX, settings.RenderResolutionY);
-            RefreshMaxIter();
             font = Content.Load<SpriteFont>("font");
             whitePixel = new Texture2D(GraphicsDevice, 1, 1);
             whitePixel.SetData<byte>(new byte[] { 255, 255, 255, 255 });
 
+            backScreen = new Texture2D(this.GraphicsDevice, settings.ResolutionX, settings.ResolutionY);
+            Color g1 = new Color((byte)148, 148, 148);
+            Color g2 = new Color((byte)100, 100, 100);
+            Color[] gridColor = new Color[settings.ResolutionX * settings.ResolutionY];
+            int squareSize = 8;
+            for (int y = 0; y < settings.ResolutionY / squareSize; y++)
+            {
+                for (int x = 0; x < settings.ResolutionX / squareSize; x++)
+                {
+                    for (int x1 = 0; x1 < squareSize; x1++)
+                        for (int y1 = 0; y1 < squareSize; y1++)
+                            gridColor[(y * squareSize + y1) * settings.ResolutionX + (x * squareSize + x1)] = y % 2 == 0 ? (x % 2 == 0 ? g1 : g2) : (x % 2 == 0 ? g2 : g1);
+                }
+            }
+            backScreen.SetData<Color>(gridColor);
 
 
+            gpu = new MandelbrotMultiGPU(settings.Devices_OpenCL_ID.ToArray(),
+                settings.Devices_SplitX.ToArray(),
+                settings.Maxiter_Per_Step.ToArray(),
+                settings.Devices_PortionY.ToArray(),
+                settings.RenderResolutionX, settings.RenderResolutionY);
+            RefreshMaxIter();
         }
 
 
@@ -125,7 +118,10 @@ namespace Mandelbrot_View
             colors = new uint[maxiter + 1];
             for (int i = 0; i < maxiter + 1; i++)
             {
-                MyColor c = MandelbrotHelper.GetLinearGradient(i, 0, maxiter, settings.Colors.ToArray(), settings.Weight.ToArray());
+                MyColor c = MandelbrotHelper.GetLinearGradient(i, 0, maxiter,
+                    settings.Colors.ToArray(),
+                    settings.Weight.ToArray(),
+                    x => Math.Log(x * 9 + 1) / Math.Log(10));
                 colors[i] = c.GetRGBA();
             }
             gpu.SetNewColors(colors);
@@ -266,8 +262,8 @@ namespace Mandelbrot_View
         {
             RecalcColor(maxiter_copy);
             DateTime start = DateTime.Now;
-            double vx = viewport * settings.RenderResolutionX / settings.RenderResolutionY;
-            buffer = gpu.GetArea(x - vx, x + vx, y - viewport, y + viewport, maxiter_copy);
+            double vx = viewport_copy * settings.RenderResolutionX / settings.RenderResolutionY;
+            buffer = gpu.GetArea(x_copy - vx, x_copy + vx, y_copy - viewport_copy, y_copy + viewport_copy, maxiter_copy);
             lock (locker)
             {
                 screen.SetData<uint>(buffer);
@@ -312,6 +308,7 @@ namespace Mandelbrot_View
             {
                 if (input_changed && !rendering)
                 {
+                    if (th != null) th.Join();
                     maxiter_copy = maxiter;
                     x_copy = x;
                     y_copy = y;
@@ -335,7 +332,7 @@ namespace Mandelbrot_View
 
 
 
-                double vx = viewport * settings.RenderResolutionX / settings.RenderResolutionY;
+
                 double pixel_value = rendered_viewport / settings.RenderResolutionY;
 
                 double center_x = (settings.RenderResolutionX / 2.0) + (x - rendered_x) / pixel_value / 2.0;

@@ -22,6 +22,11 @@ namespace Mandelbrot_View
     }
     class Settings
     {
+        public double InitialCenterX { get; set; }
+        public double InitialCenterY { get; set; }
+        public double InitialViewportSizeY { get; set; }
+        public double InitialMaxIter { get; set; }
+
         public int ResolutionX { get; set; }
         public int ResolutionY { get; set; }
         public int RenderResolutionX { get; set; }
@@ -29,17 +34,19 @@ namespace Mandelbrot_View
         public bool FullScreen { get; set; }
 
 
-
         public List<int> Devices_OpenCL_ID { get; set; }
         public List<int> Devices_SplitX { get; set; }
         public List<int> Devices_PortionY { get; set; }
+        public List<int> Maxiter_Per_Step { get; set; }
 
         [JsonConverter(typeof(StringEnumConverter))]
         public MaxiterMode MaxiterMode { get; set; }
         [JsonConverter(typeof(StringEnumConverter))]
         public RenderMode RenderMode { get; set; }
 
+
         public List<MyColor> Colors { get; set; }
         public List<double> Weight { get; set; }
+        public string GradientFunction { get; set; }
     }
 }

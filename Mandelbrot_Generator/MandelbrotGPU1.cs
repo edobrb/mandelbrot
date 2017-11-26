@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Mandelbrot_Generator
 {
-    public class MandelbrotGPU1
+    public class MandelbrotGPU
     {
         private static bool release = false;
         eLanguage gpu_language = eLanguage.OpenCL;
@@ -18,7 +18,7 @@ namespace Mandelbrot_Generator
         GPGPU _gpu;
         CudafyModule km;
 
-        int res_x, res_y, split_x, start_index;
+        int res_x, res_y, split_x, start_index, maxiter_per_step;
         uint[] dev_colors = null;
         uint[] dev_buffer, buffer;
 
@@ -28,13 +28,13 @@ namespace Mandelbrot_Generator
         double[] dev_cy_a;
         int[] dev_it_a;
 
-        public MandelbrotGPU1(int device_id, int res_x, int res_y, int split_x, uint[] buffer, int start_index)
+        public MandelbrotGPU(int device_id, int res_x, int res_y, int split_x, uint[] buffer, int start_index, int maxiter_per_step)
         {
             CudafyTranslator.Language = gpu_language;
 
             if (!release)
             {
-                km = CudafyTranslator.Cudafy(typeof(MandelbrotCode1));
+                km = CudafyTranslator.Cudafy(typeof(MandelbrotCode));
                 km.Serialize("kernel.gpu");
             }
             else
@@ -53,13 +53,13 @@ namespace Mandelbrot_Generator
             _gpu.CopyToDevice<uint>(this.buffer, start_index, this.dev_buffer, 0, res_x * res_y);
             this.split_x = split_x;
             this.start_index = start_index;
+            this.maxiter_per_step = maxiter_per_step;
 
-
-            this.dev_xi_a = _gpu.Allocate<double>(res_x * res_y);
-            this.dev_yi_a = _gpu.Allocate<double>(res_x * res_y);
-            this.dev_cx_a = _gpu.Allocate<double>(res_x * res_y);
-            this.dev_cy_a = _gpu.Allocate<double>(res_x * res_y);
-            this.dev_it_a = _gpu.Allocate<int>(res_x * res_y);
+            this.dev_xi_a = _gpu.Allocate<double>(res_x * res_y / split_x);
+            this.dev_yi_a = _gpu.Allocate<double>(res_x * res_y / split_x);
+            this.dev_cx_a = _gpu.Allocate<double>(res_x * res_y / split_x);
+            this.dev_cy_a = _gpu.Allocate<double>(res_x * res_y / split_x);
+            this.dev_it_a = _gpu.Allocate<int>(res_x * res_y / split_x);
         }
 
         public void SetNewColors(uint[] colors)
@@ -74,30 +74,31 @@ namespace Mandelbrot_Generator
         {
             for (int i = 0; i < split_x; i++)
             {
-                _gpu.Launch(new dim3(res_y), new dim3(res_x / split_x)).initialize(x0, x1, y0, y1, dev_buffer,
-                    res_x, res_y, max_iter, dev_colors, res_x / split_x * i,
-                    dev_xi_a, dev_yi_a, dev_it_a, dev_cx_a, dev_cy_a);
-            }
-            _gpu.Synchronize();
-
-            int max_chunk_iter = 64;
-            for (int i = 0; i < split_x; i++)
-            {
-                int mi = max_iter;
-
-                while (mi > 0)
+                if (maxiter_per_step >= max_iter || maxiter_per_step <= 0)
                 {
-                    _gpu.Launch(new dim3(res_y), new dim3(res_x / split_x)).iterate(dev_xi_a, dev_yi_a, dev_it_a, dev_cx_a, dev_cy_a,
-                        max_iter, res_x, res_x / split_x * i, mi > max_chunk_iter ? max_chunk_iter : mi);
-                    mi -= max_chunk_iter;
+                    _gpu.Launch(new dim3(res_y), new dim3(res_x / split_x)).calculate(x0, x1, y0, y1, dev_buffer,
+                        res_x, res_y, max_iter, dev_colors, res_x / split_x * i);
                 }
+                else
+                {
+                    _gpu.Launch(new dim3(res_y), new dim3(res_x / split_x)).initialize(x0, x1, y0, y1, dev_buffer,
+                        res_x, res_y, max_iter, dev_colors, res_x / split_x * i,
+                        dev_xi_a, dev_yi_a, dev_it_a, dev_cx_a, dev_cy_a);
+                    _gpu.Synchronize();
+                    int mi = max_iter;
+                    while (mi > 0)
+                    {
+                        _gpu.Launch(new dim3(res_y), new dim3(res_x / split_x)).iterate(dev_xi_a, dev_yi_a, dev_it_a, dev_cx_a, dev_cy_a,
+                            maxiter_per_step <= 0 ? max_iter : (mi > maxiter_per_step ? maxiter_per_step : mi), res_y);
 
+                        if (maxiter_per_step <= 0) break;
+                        mi -= maxiter_per_step;
+                    }
+                    _gpu.Synchronize();
+                    _gpu.Launch(new dim3(res_y), new dim3(res_x / split_x)).finalize(res_x, res_y, res_x / split_x * i, dev_buffer, dev_colors, dev_it_a);
+                }
             }
-            _gpu.Synchronize();
-            for (int i = 0; i < split_x; i++)
-            {
-                _gpu.Launch(new dim3(res_y), new dim3(res_x / split_x)).finalize(res_x, res_x / split_x * i, dev_buffer, dev_colors, dev_it_a);
-            }
+
         }
         public void Syncronize()
         {
@@ -111,7 +112,7 @@ namespace Mandelbrot_Generator
             _gpu.Dispose();
         }
     }
-    class MandelbrotCode1
+    class MandelbrotCode
     {
         [Cudafy]
         public static void initialize(GThread thread, double x0, double x1, double y0, double y1,
@@ -120,7 +121,7 @@ namespace Mandelbrot_Generator
         {
             int y = thread.blockIdx.x;
             int x = thread.threadIdx.x + split_x_offset;
-            int tid = y * res_x + x;
+            int tid = thread.blockIdx.x + res_y * thread.threadIdx.x;
 
             cx_a[tid] = x0 + x * (x1 - x0) / res_x;
             cy_a[tid] = y0 + y * (y1 - y0) / res_y;
@@ -132,33 +133,29 @@ namespace Mandelbrot_Generator
 
         [Cudafy]
         public static void iterate(GThread thread, double[] xi_a, double[] yi_a, int[] it_a, double[] cx_a, double[] cy_a,
-            int max_iter, int res_x, int split_x_offset, int k)
+            int max_iter, int res_y)
         {
-            int y = thread.blockIdx.x;
-            int x = thread.threadIdx.x + split_x_offset;
-            int tid = y * res_x + x;
+            int tid = thread.blockIdx.x + res_y * thread.threadIdx.x;
 
+            int k = 0;
+            int it = it_a[tid];
             double xi = xi_a[tid];
             double yi = yi_a[tid];
-            int it = it_a[tid];
+            double cx = cx_a[tid];
+            double cy = cy_a[tid];
 
             double x2 = xi * xi, y2 = yi * yi;
-
-
-            while (x2 + y2 < 4.0 && k > 0)
+            while (k < max_iter && x2 + y2 < 4.0)
             {
-                yi = 2.0 * xi * yi + cy_a[tid];
-                xi = x2 - y2 + cx_a[tid];
+                yi = 2.0 * xi * yi + cy;
+                xi = x2 - y2 + cx;
 
-                it++;
                 x2 = xi * xi;
                 y2 = yi * yi;
 
-                k--;
+                it++;
+                k++;
             }
-
-            //thread.SyncThreads();
-            it = it > max_iter ? max_iter : it;
 
             xi_a[tid] = xi;
             yi_a[tid] = yi;
@@ -166,12 +163,39 @@ namespace Mandelbrot_Generator
         }
 
         [Cudafy]
-        public static void finalize(GThread thread, int res_x, int split_x_offset, uint[] buffer, uint[] colors, int[] it_a)
+        public static void finalize(GThread thread, int res_x, int res_y, int split_x_offset, uint[] buffer, uint[] colors, int[] it_a)
         {
             int y = thread.blockIdx.x;
             int x = thread.threadIdx.x + split_x_offset;
-            int tid = y * res_x + x;
-            buffer[tid] = colors[it_a[tid]];
+            int tid = thread.blockIdx.x + res_y * thread.threadIdx.x;
+            buffer[y * res_x + x] = colors[it_a[tid]];
+        }
+
+        [Cudafy]
+        public static void calculate(GThread thread, double x0, double x1, double y0, double y1,
+            uint[] buffer, int res_x, int res_y, int max_iter, uint[] colors, int split_x_offset)
+        {
+            double x2 = 0.0, y2 = 0.0, xi = 0.0, yi = 0.0;
+            int it = 0;
+
+            int y = thread.blockIdx.x;
+            int x = thread.threadIdx.x + split_x_offset;
+
+            double cx = x0 + x * (x1 - x0) / res_x;
+            double cy = y0 + y * (y1 - y0) / res_y;
+
+            while (it < max_iter && x2 + y2 < 4.0)
+            {
+                yi = 2.0 * xi * yi + cy;
+                xi = x2 - y2 + cx;
+
+                x2 = xi * xi;
+                y2 = yi * yi;
+
+                it++;
+            }
+
+            buffer[y * res_x + x] = colors[it];
         }
     }
 }

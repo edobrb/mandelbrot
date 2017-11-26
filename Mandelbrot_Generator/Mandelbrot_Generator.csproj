@@ -49,6 +49,8 @@
     <Compile Include="MandelbrotGPU1.cs" />
     <Compile Include="MandelbrotHelper.cs" />
     <Compile Include="MandelbrotMultiGPU.cs" />
+    <Compile Include="MyMath\CodeCompiler.cs" />
+    <Compile Include="MyMath\Function.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

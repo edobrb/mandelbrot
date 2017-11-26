@@ -41,6 +41,7 @@ namespace Mandelbrot_View
 
         [JsonConverter(typeof(StringEnumConverter))]
         public MaxiterMode MaxiterMode { get; set; }
+        public string MaxIterDynamicFunction { get; set; }
         [JsonConverter(typeof(StringEnumConverter))]
         public RenderMode RenderMode { get; set; }
 

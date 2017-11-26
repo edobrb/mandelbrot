@@ -9,12 +9,12 @@
   "ResolutionY":       1080,
   "RenderResolutionX": 3840,
   "RenderResolutionY": 2160,
-  "FullScreen":        true,
+  "FullScreen":        false,
   
   
-  "MaxiterMode": "Static",
-  "RenderMode":  "Manual",
-  
+  "MaxiterMode": "Static", //"Static" or "Dynamic"
+  "RenderMode":  "Fluid", //"Manual" or "Forced" or "Fluid"
+  "MaxIterDynamicFunction": "sqrt(2 * sqrt(|1 - sqrt(5 / viewport)|)) * (maxiter / 10);",
   
   "Devices_OpenCL_ID":  [ 2 ],
   "Devices_SplitX":     [ 4 ],
@@ -28,8 +28,8 @@
     { "A": 255, "R":   0, "G":   0, "B":   0 },
     { "A": 255, "R": 255, "G":   0, "B":   0 },
     { "A": 255, "R": 139, "G":   0, "B":   0 },
-    { "A": 255, "R":   0, "G":   0, "B":   0 },
+    { "A": 255, "R":   0, "G":   0, "B":   0 }
   ],
   "Weight":           [ 1.0, 1.0, 1.0, 1.0, 1.0 ],
-  "GradientFunction": "ln(x * 9 + 1) / ln(10)",
+  "GradientFunction": "ln(x * 9 + 1) / ln(10)" //x^0.5 also good
 }

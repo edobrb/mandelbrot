@@ -1,5 +1,6 @@
 ﻿using Cudafy.Host;
 using Mandelbrot_Generator;
+using MathTools;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -30,7 +31,7 @@ namespace Mandelbrot_View
         double x, y, viewport;
         double rendered_x, rendered_y, rendered_viewport;
 
-        Texture2D screen, whitePixel, backScreen;
+        Texture2D screen, whitePixel, backScreen, colorGradingTexture;
         Settings settings;
         MandelbrotMultiGPU gpu;
         SpriteFont font;
@@ -41,6 +42,9 @@ namespace Mandelbrot_View
         bool showInfo = false;
         TimeSpan renderTime = TimeSpan.FromSeconds(1);
         string screenshotFile = "none";
+        Function gradientColorF;
+        Function maxiterDynamicG;
+
         public Game1()
         {
             if (File.Exists("settings.json"))
@@ -52,7 +56,7 @@ namespace Mandelbrot_View
             {
                 throw new Exception("Configuration file not found");
             }
-
+            
 
             graphics = new GraphicsDeviceManager(this);
 
@@ -64,7 +68,26 @@ namespace Mandelbrot_View
             this.IsMouseVisible = true;
 
         }
+        private void ReloadSettings()
+        {
+            if (File.Exists("settings.json"))
+            {
+                var json = File.ReadAllText("settings.json");
+                Settings s = JsonConvert.DeserializeObject<Settings>(json);
 
+                gradientColorF = new Function("f", s.GradientFunction);
+                maxiterDynamicG = new Function("f", s.MaxIterDynamicFunction, new string[] { "viewport", "maxiter" });
+                settings.Colors = s.Colors;
+                settings.Weight = s.Weight;
+                settings.MaxiterMode = s.MaxiterMode;
+                settings.RenderMode = s.RenderMode;
+                RefreshMaxIter();
+            }
+            else
+            {
+                throw new Exception("Configuration file not found");
+            }
+        }
 
         protected override void Initialize()
         {
@@ -76,10 +99,13 @@ namespace Mandelbrot_View
             maxiter_def = settings.InitialMaxIter;
 
             oldkey = Keyboard.GetState();
+            gradientColorF = new Function("f", settings.GradientFunction);
+            maxiterDynamicG = new Function("f", settings.MaxIterDynamicFunction, new string[] { "viewport", "maxiter" });
             base.Initialize();
         }
         protected override void LoadContent()
         {
+            colorGradingTexture = new Texture2D(GraphicsDevice, 265, 1);
             spriteBatch = new SpriteBatch(GraphicsDevice);
             screen = new Texture2D(this.GraphicsDevice, settings.RenderResolutionX, settings.RenderResolutionY, false, SurfaceFormat.Color);
             font = Content.Load<SpriteFont>("font");
@@ -116,21 +142,36 @@ namespace Mandelbrot_View
         private void RecalcColor(int maxiter)
         {
             colors = new uint[maxiter + 1];
+
             for (int i = 0; i < maxiter + 1; i++)
             {
                 MyColor c = MandelbrotHelper.GetLinearGradient(i, 0, maxiter,
                     settings.Colors.ToArray(),
                     settings.Weight.ToArray(),
-                    x => Math.Log(x * 9 + 1) / Math.Log(10));
+                    gradientColorF.Value);
                 colors[i] = c.GetRGBA();
+               
             }
+
+            uint[] data = new uint[colorGradingTexture.Width];
+            for (int i = 0; i < colorGradingTexture.Width; i++)
+            {
+                MyColor c = MandelbrotHelper.GetLinearGradient(i, 0, colorGradingTexture.Width - 1,
+                    settings.Colors.ToArray(),
+                    settings.Weight.ToArray(),
+                    gradientColorF.Value);
+                data[i] = c.GetRGBA();
+            }
+
+
+            colorGradingTexture.SetData<uint>(data);
             gpu.SetNewColors(colors);
         }
         private void RefreshMaxIter()
         {
             if (settings.MaxiterMode == MaxiterMode.Dynamic)
             {
-                maxiter = (int)(Math.Sqrt(2 * Math.Sqrt(Math.Abs(1 - Math.Sqrt(5 * settings.ResolutionX / viewport)))) * (maxiter_def / 10));
+                maxiter = (int)maxiterDynamicG.Value(viewport / settings.ResolutionX, maxiter_def);
             }
             else
             {
@@ -242,14 +283,16 @@ namespace Mandelbrot_View
                     input_changed = true;
                 }
             }
-            else if (settings.RenderMode == RenderMode.Manual)
+            
+            if (key.IsKeyDown(Keys.Enter) && oldkey.IsKeyUp(Keys.Enter))
             {
-                if (key.IsKeyDown(Keys.Enter) && oldkey.IsKeyUp(Keys.Enter))
-                {
                     input_changed = true;
-                }
             }
-
+            if (key.IsKeyDown(Keys.R) && oldkey.IsKeyUp(Keys.R))
+            {
+                ReloadSettings();
+                RecalcColor(maxiter);
+            }
 
 
 
@@ -350,14 +393,17 @@ namespace Mandelbrot_View
 
                 if (showInfo)
                 {
-                    r = new Rectangle(0, 0, 265, 125);
-                    spriteBatch.Draw(whitePixel, r, Color.Silver);
+                    r = new Rectangle(0, 0, 265, 185);
+                    spriteBatch.Draw(whitePixel, r, Color.White * 0.4f);
                     spriteBatch.DrawString(font, "X: " + x, new Vector2(5, 5), Color.Black);
                     spriteBatch.DrawString(font, "Y: " + y, new Vector2(5, 25), Color.Black);
                     spriteBatch.DrawString(font, "Viewport: " + viewport, new Vector2(5, 45), Color.Black);
                     spriteBatch.DrawString(font, "Maxiter: " + maxiter, new Vector2(5, 65), Color.Black);
                     spriteBatch.DrawString(font, "Fps: " + Math.Round(1.0 / renderTime.TotalSeconds, 3), new Vector2(5, 85), Color.Black);
                     spriteBatch.DrawString(font, "Last screenshot: " + screenshotFile, new Vector2(5, 105), Color.Black);
+
+                    spriteBatch.DrawString(font, "Color gradient: ", new Vector2(5, 132), Color.Black);
+                    spriteBatch.Draw(colorGradingTexture, new Rectangle(5, 150, 255, 30), Color.White);
                 }
                 spriteBatch.End();
                 base.Draw(gameTime);

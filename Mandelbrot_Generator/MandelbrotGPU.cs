@@ -197,5 +197,65 @@ namespace Mandelbrot_Generator
 
             buffer[y * res_x + x] = colors[it];
         }
+
+
+
+        [Cudafy]
+        public static void calculate1(GThread thread, double x0, double x1, double y0, double y1,
+           uint[] buffer, int res_x, int res_y, int max_iter, uint[] colors, int split_x_offset)
+        {
+            double xtmp = 0.0, ytmp = 0.0, xi = 0.0, yi = 0.0;
+            int it = 0;
+
+            int y = thread.blockIdx.x;
+            int x = thread.threadIdx.x + split_x_offset;
+
+            double cx = x0 + x * (x1 - x0) / res_x;
+            double cy = y0 + y * (y1 - y0) / res_y;
+
+            while (it < max_iter && (xtmp * xtmp) + (ytmp * ytmp) < 4.0)
+            {
+
+                xi = it2_x(xtmp, ytmp) + cx;
+                yi = it2_y(xtmp, ytmp) + cy;
+
+                xtmp = xi;
+                ytmp = yi;
+
+                it++;
+            }
+
+            buffer[y * res_x + x] = colors[it];
+        }
+        [Cudafy]
+        public static double it2_x(double x, double y)
+        {
+            return x * x - y * y;
+        }
+        [Cudafy]
+        public static double it2_y(double x, double y)
+        {
+            return 2 * x * y;
+        }
+        [Cudafy]
+        public static double it3_x(double x, double y)
+        {
+            return x * x * x -  3 * x * y * y;
+        }
+        [Cudafy]
+        public static double it3_y(double x, double y)
+        {
+            return 3 * x * x * y - y * y * y;
+        }
+        [Cudafy]
+        public static double it4_x(double x, double y)
+        {
+            return x * x * x * x - 6 * x * x * y * y + y * y * y * y;
+        }
+        [Cudafy]
+        public static double it4_y(double x, double y)
+        {
+            return 4 * x * x * x * y - 4 * x * y * y * y;
+        }
     }
 }

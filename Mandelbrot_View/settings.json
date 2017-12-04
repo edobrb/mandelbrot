@@ -9,15 +9,15 @@
   "ResolutionY":       1080,
   "RenderResolutionX": 3840,
   "RenderResolutionY": 2160,
-  "FullScreen":        false,
+  "FullScreen":        true,
   
   
   "MaxiterMode": "Static", //"Static" or "Dynamic"
   "RenderMode":  "Fluid", //"Manual" or "Forced" or "Fluid"
   "MaxIterDynamicFunction": "sqrt(2 * sqrt(|1 - sqrt(5 / viewport)|)) * (maxiter / 10);",
   
-  "Devices_OpenCL_ID":  [ 2 ],
-  "Devices_SplitX":     [ 4 ],
+  "Devices_OpenCL_ID":  [ 0 ],
+  "Devices_SplitX":     [ 384 ],
   "Maxiter_Per_Step":   [ 64 ],
   "Devices_PortionY":   [ 1 ],
   

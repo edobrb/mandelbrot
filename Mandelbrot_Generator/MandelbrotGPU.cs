@@ -108,7 +108,12 @@ namespace Mandelbrot_Generator
 
         public void Close()
         {
-            _gpu.FreeAll();
+            _gpu.Free(dev_buffer);
+            _gpu.Free(dev_xi_a);
+            _gpu.Free(dev_yi_a);
+            _gpu.Free(dev_cx_a);
+            _gpu.Free(dev_cy_a);
+            _gpu.Free(dev_it_a);
             _gpu.Dispose();
         }
     }

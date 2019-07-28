@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Runtime.Serialization;
+using System.Drawing;
 
 namespace Mandelbrot_Generator
 {
@@ -11,6 +14,10 @@ namespace Mandelbrot_Generator
     {
         static void Main(string[] args)
         {
+            Image image = Bitmap.FromFile(
+                @"C:\Users\Edo\Desktop\Mandelbrot\Mandelbrot_View\bin\Windows\x86\Debug\screenshot\8.png");
+            PropertyItem p = image.GetPropertyItem(0x010E);
+            Console.WriteLine("");
             /*
             int res_y = 100000;
             int res_x = res_y;

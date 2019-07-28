@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.Serialization;
+using System.Linq;
 
 namespace Mandelbrot_View
 {
@@ -23,7 +25,6 @@ namespace Mandelbrot_View
 
         int maxiter;
 
-        uint[] colors;
         uint[] buffer;
         bool toUpdate;
 
@@ -33,7 +34,7 @@ namespace Mandelbrot_View
 
         Texture2D screen, whitePixel, backScreen, colorGradingTexture;
         Settings settings;
-        MandelbrotMultiGPU gpu;
+        MandelbrotMultiGPU gpu, gpuScreenShot;
         SpriteFont font;
 
         double maxiter_def;
@@ -134,6 +135,12 @@ namespace Mandelbrot_View
                 settings.Maxiter_Per_Step.ToArray(),
                 settings.Devices_PortionY.ToArray(),
                 settings.RenderResolutionX, settings.RenderResolutionY);
+            gpuScreenShot = new MandelbrotMultiGPU(settings.Devices_OpenCL_ID.ToArray(),
+                settings.Devices_SplitX.ToArray(),
+                settings.Maxiter_Per_Step.ToArray(),
+                settings.Devices_PortionY.ToArray(),
+                settings.ScreenShotResolutionX, settings.ScreenShotResolutionY);
+
             RefreshMaxIter();
         }
 
@@ -141,7 +148,8 @@ namespace Mandelbrot_View
 
         private void RecalcColor(int maxiter)
         {
-            colors = new uint[maxiter + 1];
+            uint[] colors = new uint[maxiter + 1];
+            uint[] colorsScreenShot = new uint[maxiter + 1];
 
             for (int i = 0; i < maxiter + 1; i++)
             {
@@ -150,7 +158,7 @@ namespace Mandelbrot_View
                     settings.Weight.ToArray(),
                     gradientColorF.Value);
                 colors[i] = c.GetRGBA();
-               
+                colorsScreenShot[i] = c.GetARGB();
             }
 
             uint[] data = new uint[colorGradingTexture.Width];
@@ -166,6 +174,7 @@ namespace Mandelbrot_View
 
             colorGradingTexture.SetData<uint>(data);
             gpu.SetNewColors(colors);
+            gpuScreenShot.SetNewColors(colorsScreenShot);
         }
         private void RefreshMaxIter()
         {
@@ -179,7 +188,7 @@ namespace Mandelbrot_View
             }
         }
 
-
+       
         private void Input(GameTime gameTime)
         {
             KeyboardState key = Keyboard.GetState();
@@ -255,7 +264,30 @@ namespace Mandelbrot_View
                 }
                 screenshotFile = (Directory.GetFiles("screenshot").Length + offset) + ".png";
                 Stream stream = File.Open("screenshot\\" + (Directory.GetFiles("screenshot").Length + offset) + ".png", FileMode.Create);
-                screen.SaveAsPng(stream, settings.ResolutionX * 2, settings.ResolutionY * 2);
+                double vx = viewport * settings.ScreenShotResolutionX / settings.ScreenShotResolutionY;
+                RefreshMaxIter();
+                RecalcColor(maxiter);
+                uint[] tmp = gpuScreenShot.GetArea(x - vx, x + vx, y - viewport, y + viewport, maxiter);
+                unsafe
+                {
+                    fixed (uint* ptr = tmp)
+                    {
+                        using (System.Drawing.Bitmap image1 = 
+                            new System.Drawing.Bitmap(settings.ScreenShotResolutionX, 
+                            settings.ScreenShotResolutionY, 
+                            settings.ScreenShotResolutionX * 4,
+                            System.Drawing.Imaging.PixelFormat.Format32bppArgb, new IntPtr(ptr)))
+                        {
+                            /*var newItem = (System.Drawing.Imaging.PropertyItem)FormatterServices.GetUninitializedObject(typeof(System.Drawing.Imaging.PropertyItem));
+                            newItem.Id = 0x010E;
+                            newItem.Len = 16;
+                            newItem.Type = 1;
+                            newItem.Value = BitConverter.GetBytes(x).Concat(BitConverter.GetBytes(y)).Concat(BitConverter.GetBytes(viewport)).ToArray();
+                            image1.SetPropertyItem(newItem);*/
+                            image1.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                    }
+                }
                 stream.Close();
 
             }

@@ -31,6 +31,8 @@ namespace Mandelbrot_View
         public int ResolutionY { get; set; }
         public int RenderResolutionX { get; set; }
         public int RenderResolutionY { get; set; }
+        public int ScreenShotResolutionX { get; set; }
+        public int ScreenShotResolutionY { get; set; }
         public bool FullScreen { get; set; }
 
 

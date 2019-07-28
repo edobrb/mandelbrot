@@ -66,6 +66,17 @@ namespace Mandelbrot_Generator
             v += R;
             return v;
         }
+        public uint GetARGB()
+        {
+            uint v = A;
+            v <<= 8;
+            v += R;
+            v <<= 8;
+            v += G;
+            v <<= 8;
+            v += B;
+            return v;
+        }
         public byte[] GetBytes_ARGB()
         {
             return new byte[] { A, R, G, B };
@@ -79,5 +90,7 @@ namespace Mandelbrot_Generator
         public static MyColor Red = new MyColor(255, 0, 0, 255);
         public static MyColor DarkRed = new MyColor(139, 0, 0, 255);
         public static MyColor DarkGray = new MyColor(169, 169, 169, 255);
+
+        
     }
 }

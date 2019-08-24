@@ -36,12 +36,12 @@ namespace Mandelbrot_Generator
 
 
 
-            Thread[] tasks = new Thread[gpus.Length];
+            Task[] tasks = new Task[gpus.Length];
             for (int i = 0; i < gpus.Length; i++)
             {
-                tasks[i] = new Thread(delegate (object o)
+                int my_i = i;
+                tasks[i] = new Task(() =>
                 {
-                    int my_i = (int)o;
                     double last_y_end = y0;
                     for (int k = 0; k < my_i; k++) last_y_end += y_portion * portions_y[k];
 
@@ -55,11 +55,11 @@ namespace Mandelbrot_Generator
             }
             for (int i = 0; i < gpus.Length; i++)
             {
-                tasks[i].Start(i);
+                tasks[i].Start();
             }
             for (int i = 0; i < gpus.Length; i++)
             {
-                tasks[i].Join();
+                tasks[i].Wait();
                 gpus[i].Syncronize();
             }
 

@@ -277,7 +277,7 @@ public static FunctionDelegate I(FunctionDelegate F, double from=0, double to=20
                                           bat_top +
                                           bat_bot + "}"
 
-                                         , _name, "using System; using MathTools; using System.Collections.Generic;", false, "Mandelbrot_Generator.exe");
+                                         , _name, "using System; using MathTools; using System.Collections.Generic;", false, "Mandelbrot_Generator.dll");
         }
         /*Ritorna un singolo valore della funzione*/
         public double Value(double x)

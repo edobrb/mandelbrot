@@ -1,8 +1,0 @@
-﻿<Application
-    x:Class="MonoGame_Windows_10_Universal_Project1.App"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:MonoGame_Windows_10_Universal_Project1"
-    RequestedTheme="Light">
-
-</Application>

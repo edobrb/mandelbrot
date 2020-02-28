@@ -12,7 +12,7 @@ This repo contains a Mandelbrot set visualizer implemented in C# using Cudafy an
   - Toggle full screen: **F11**
   - Take a screenshot of the current view: **F12** (saved on screenshot/*.png)
   - Reload settings: **r**
-  - update output view: **enter** (only needed if RenderMode is Manual)
+  - Update output view: **enter** (only needed if RenderMode is Manual)
 
 #### Settings
 ```

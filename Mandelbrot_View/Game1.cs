@@ -57,7 +57,7 @@ namespace Mandelbrot_View
             {
                 throw new Exception("Configuration file not found");
             }
-            
+
 
             graphics = new GraphicsDeviceManager(this);
 
@@ -188,7 +188,7 @@ namespace Mandelbrot_View
             }
         }
 
-       
+
         private void Input(GameTime gameTime)
         {
             KeyboardState key = Keyboard.GetState();
@@ -272,9 +272,9 @@ namespace Mandelbrot_View
                 {
                     fixed (uint* ptr = tmp)
                     {
-                        using (System.Drawing.Bitmap image1 = 
-                            new System.Drawing.Bitmap(settings.ScreenShotResolutionX, 
-                            settings.ScreenShotResolutionY, 
+                        using (System.Drawing.Bitmap image1 =
+                            new System.Drawing.Bitmap(settings.ScreenShotResolutionX,
+                            settings.ScreenShotResolutionY,
                             settings.ScreenShotResolutionX * 4,
                             System.Drawing.Imaging.PixelFormat.Format32bppArgb, new IntPtr(ptr)))
                         {
@@ -315,10 +315,10 @@ namespace Mandelbrot_View
                     input_changed = true;
                 }
             }
-            
+
             if (key.IsKeyDown(Keys.Enter) && oldkey.IsKeyUp(Keys.Enter))
             {
-                    input_changed = true;
+                input_changed = true;
             }
             if (key.IsKeyDown(Keys.R) && oldkey.IsKeyUp(Keys.R))
             {

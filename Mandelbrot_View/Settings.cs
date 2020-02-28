@@ -17,8 +17,8 @@ namespace Mandelbrot_View
     }
     enum MaxiterMode
     {
-       Static,
-       Dynamic,
+        Static,
+        Dynamic,
     }
     class Settings
     {

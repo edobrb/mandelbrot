@@ -272,7 +272,7 @@ public static FunctionDelegate I(FunctionDelegate F, double from=0, double to=20
 
                                         public static MyDouble module(MyDouble x,MyDouble d){return x - d * ((MyDouble)((int)(x/d))); }
 
-                                          public static MyDouble " + _name + "("+ param + "){return " + _f + ";}"
+                                          public static MyDouble " + _name + "(" + param + "){return " + _f + ";}"
                                         + others_s +
                                           bat_top +
                                           bat_bot + "}"

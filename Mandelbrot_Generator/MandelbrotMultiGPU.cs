@@ -50,7 +50,7 @@ namespace Mandelbrot_Generator
 
 
                     gpus[my_i].UpdateArea(x0, x1, y0_gpu, y1_gpu, max_iter);
-                    
+
                 });
             }
             for (int i = 0; i < gpus.Length; i++)

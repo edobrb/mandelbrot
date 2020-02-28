@@ -18,7 +18,7 @@
   "RenderMode":  "Fluid", //"Manual" or "Forced" or "Fluid"
   "MaxIterDynamicFunction": "sqrt(2 * sqrt(|1 - sqrt(5 / viewport)|)) * (maxiter / 10);",
   
-  "Devices_OpenCL_ID":  [ 2 ],
+  "Devices_OpenCL_ID":  [ 0 ],
   "Devices_SplitX":     [ 8 ],
   "Maxiter_Per_Step":   [ 64 ],
   "Devices_PortionY":   [ 1 ],

@@ -24,7 +24,7 @@ namespace Mandelbrot_Generator
             byte r = (byte)linear(bas, 0, range[i], colors[i * 4 + 1], colors[(i + 1) * 4 + 1]);
             byte g = (byte)linear(bas, 0, range[i], colors[i * 4 + 2], colors[(i + 1) * 4 + 2]);
             byte b = (byte)linear(bas, 0, range[i], colors[i * 4 + 3], colors[(i + 1) * 4 + 3]);
-           
+
             return new byte[] { a, r, g, b };
         }
         public static MyColor GetLinearGradient(double v, double minV, double maxV, MyColor[] colors, double[] range, Func<double, double> gradient)
@@ -91,6 +91,6 @@ namespace Mandelbrot_Generator
         public static MyColor DarkRed = new MyColor(139, 0, 0, 255);
         public static MyColor DarkGray = new MyColor(169, 169, 169, 255);
 
-        
+
     }
 }

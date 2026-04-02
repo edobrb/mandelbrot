@@ -52,10 +52,19 @@ fn fs(@builtin(position) pos : vec4<f32>) -> @location(0) vec4<f32> {
 
 // ---------- Helpers ----------
 
-function splitDouble(val) {
-    const hi = Math.fround(val);
-    const lo = Math.fround(val - hi);
-    return [hi, lo];
+function splitOcto(val) {
+    const x0 = Math.fround(val);
+    const r1 = val - x0;
+    const x1 = Math.fround(r1);
+    const r2 = r1 - x1;
+    const x2 = Math.fround(r2);
+    const r3 = r2 - x2;
+    const x3 = Math.fround(r3);
+    const r4 = r3 - x3;
+    const x4 = Math.fround(r4);
+    // JS f64 has 52-bit mantissa; 3 f32 (24-bit each) exhaust it,
+    // so x3 onward will be 0. Kept for completeness / future bignum inputs.
+    return [x0, x1, x2, x3, x4, 0, 0, 0];
 }
 
 // ---------- Renderer class ----------
@@ -153,9 +162,9 @@ export class Renderer {
     }
 
     _createStaticBuffers() {
-        // Compute params uniform (48 bytes)
+        // Compute params uniform (144 bytes: 32 f32 coords + 4 u32)
         this.computeParamsBuffer = this.device.createBuffer({
-            size: 48,
+            size: 144,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -241,17 +250,17 @@ export class Renderer {
         if (this.width === 0 || this.height === 0) return;
         if (!this.computeBindGroup || !this.renderBindGroup) return;
 
-        // Write compute params
-        const [x0h, x0l] = splitDouble(x0);
-        const [x1h, x1l] = splitDouble(x1);
-        const [y0h, y0l] = splitDouble(y0);
-        const [y1h, y1l] = splitDouble(y1);
-
-        const paramsF = new Float32Array([x0h, x0l, x1h, x1l, y0h, y0l, y1h, y1l]);
+        // Write compute params (144 bytes: 32 f32 coords + 4 u32)
+        const paramsF = new Float32Array([
+            ...splitOcto(x0),
+            ...splitOcto(x1),
+            ...splitOcto(y0),
+            ...splitOcto(y1),
+        ]);
         const paramsU = new Uint32Array([this.width, this.height, maxIter, 0]);
-        const paramsBuf = new ArrayBuffer(48);
-        new Float32Array(paramsBuf, 0, 8).set(paramsF);
-        new Uint32Array(paramsBuf, 32, 4).set(paramsU);
+        const paramsBuf = new ArrayBuffer(144);
+        new Float32Array(paramsBuf, 0, 32).set(paramsF);
+        new Uint32Array(paramsBuf, 128, 4).set(paramsU);
         this.device.queue.writeBuffer(this.computeParamsBuffer, 0, paramsBuf);
 
         const encoder = this.device.createCommandEncoder();

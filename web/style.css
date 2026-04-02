@@ -1,0 +1,124 @@
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    color: #e0e0e0;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* ---------- Canvas ---------- */
+
+#mandelbrot-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+/* ---------- Error message ---------- */
+
+#error-message {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    font-size: 1.25rem;
+    text-align: center;
+    background: #111;
+    color: #f44;
+    z-index: 100;
+}
+
+/* ---------- Info overlay ---------- */
+
+.info-overlay {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 14px 18px;
+    z-index: 50;
+    pointer-events: none;
+    font-size: 13px;
+    line-height: 1.6;
+    min-width: 320px;
+    transition: opacity 0.15s ease;
+}
+
+.info-overlay.hidden {
+    display: none;
+}
+
+.info-table {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 10px;
+    row-gap: 2px;
+}
+
+.info-row {
+    display: contents;
+}
+
+.info-label {
+    color: #999;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.info-value {
+    color: #ddd;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.info-grad-label {
+    margin-top: 10px;
+    margin-bottom: 4px;
+    color: #999;
+    font-weight: 600;
+}
+
+.gradient-preview {
+    width: 100%;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.info-help {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #777;
+    line-height: 1.5;
+}
+.info-help b {
+    color: #999;
+}
+
+/* ---------- Utility ---------- */
+
+.hidden {
+    display: none !important;
+}

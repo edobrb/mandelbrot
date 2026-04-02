@@ -1,0 +1,26 @@
+export const defaultSettings = {
+    initialCenterX: 0.261750402076009,
+    initialCenterY: 0.0020502675513626,
+    initialViewportSizeY: 1.15,
+    initialMaxIter: 500,
+
+    maxiterMode: 'Dynamic',
+
+    colors: [
+        { r: 69,  g: 69,  b: 69,  a: 255 },
+        { r: 169, g: 169, b: 169, a: 255 },
+        { r: 0,   g: 0,   b: 0,   a: 255 },
+        { r: 255, g: 0,   b: 0,   a: 255 },
+        { r: 139, g: 0,   b: 0,   a: 255 },
+        { r: 0,   g: 0,   b: 0,   a: 255 },
+    ],
+
+    weights: [1.0, 1.0, 1.0, 1.0, 1.0],
+
+    gradientFunction: (x) => Math.log(x * 9 + 1) / Math.log(10),
+
+    zoomSpeed: 0.85,
+    panSpeed: 0.05,
+    keyZoomSpeed: 0.92,
+    maxIterAdjustFactor: 1.5,
+};

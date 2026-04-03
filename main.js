@@ -71,6 +71,7 @@ async function main() {
         baseMaxIter: saved?.baseMaxIter ?? settings.initialMaxIter,
         maxIter: saved?.baseMaxIter ?? settings.initialMaxIter,
         maxiterMode: saved?.maxiterMode ?? settings.maxiterMode,
+        smartphoneMode: saved?.smartphoneMode ?? false,
         dirty: true,
         refOrbitDirty: true,
         fps: 0,

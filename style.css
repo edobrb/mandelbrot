@@ -320,6 +320,32 @@ html, body {
     line-height: 1.6;
 }
 
+/* ---------- Floating toggle button (smartphone mode) ---------- */
+
+.float-toggle-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 60;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(10, 10, 10, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #ccc;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    touch-action: manipulation;
+}
+.float-toggle-btn:hover,
+.float-toggle-btn.panel-open { background: rgba(60, 60, 60, 0.92); color: #fff; }
+
 /* ---------- Utility ---------- */
 
 .hidden {

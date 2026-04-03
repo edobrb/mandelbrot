@@ -19,6 +19,7 @@ export function saveSettings(settings, state) {
         maxIterAdjustFactor: settings.maxIterAdjustFactor,
         maxiterMode: state.maxiterMode,
         baseMaxIter: state.baseMaxIter,
+        smartphoneMode: state.smartphoneMode,
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
 }

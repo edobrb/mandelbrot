@@ -22,6 +22,8 @@ export class UI {
         this._gradientCanvas = null;
         this._colorStopsWrap = null;
         this._weightsWrap = null;
+        this._floatBtn = null;
+        this._helpEl = null;
 
         this._build();
     }
@@ -45,14 +47,27 @@ export class UI {
 
         const help = document.createElement('div');
         help.className = 'dash-help';
-        help.innerHTML = 'Drag=Pan &nbsp;·&nbsp; Scroll/W/S=Zoom &nbsp;·&nbsp; Arrows=Pan &nbsp;·&nbsp; I=Toggle panel &nbsp;·&nbsp; F11=Fullscreen';
         panel.appendChild(help);
+        this._helpEl = help;
+        this._updateHelp();
 
         panel.addEventListener('wheel', (e) => e.stopPropagation());
         panel.addEventListener('mousedown', (e) => e.stopPropagation());
 
         this.container.appendChild(panel);
         this._panel = panel;
+
+        // Floating toggle button for smartphone mode
+        const floatBtn = document.createElement('button');
+        floatBtn.className = 'float-toggle-btn hidden';
+        floatBtn.textContent = '☰';
+        floatBtn.title = 'Toggle settings';
+        floatBtn.addEventListener('click', () => this.toggle());
+        floatBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+        document.body.appendChild(floatBtn);
+        this._floatBtn = floatBtn;
+
+        this._applySmartphoneMode();
     }
 
     _divider(title) {
@@ -298,6 +313,33 @@ export class UI {
             (v) => { this.settings.panSpeed = v; }
         );
 
+        // Smartphone mode toggle
+        const row = document.createElement('div');
+        row.className = 'dash-row';
+        const lbl = document.createElement('label');
+        lbl.className = 'dash-label';
+        lbl.textContent = 'Smartphone mode';
+        const seg = document.createElement('div');
+        seg.className = 'seg-control';
+        const mkBtn = (label, value) => {
+            const btn = document.createElement('button');
+            btn.className = 'seg-btn' + (this.state.smartphoneMode === value ? ' active' : '');
+            btn.textContent = label;
+            btn.addEventListener('click', () => {
+                this.state.smartphoneMode = value;
+                seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this._applySmartphoneMode();
+            });
+            this._fields['smartphone_' + label] = btn;
+            return btn;
+        };
+        seg.appendChild(mkBtn('Off', false));
+        seg.appendChild(mkBtn('On', true));
+        row.appendChild(lbl);
+        row.appendChild(seg);
+        wrap.appendChild(row);
+
         return wrap;
     }
 
@@ -494,7 +536,23 @@ export class UI {
     toggle() {
         this._visible = !this._visible;
         this._panel.classList.toggle('hidden', !this._visible);
+        if (this._floatBtn) this._floatBtn.classList.toggle('panel-open', this._visible);
         if (this._visible) { this._syncInputs(); this._refreshBookmarksList(); }
+    }
+
+    _applySmartphoneMode() {
+        const on = this.state.smartphoneMode;
+        if (this._floatBtn) this._floatBtn.classList.toggle('hidden', !on);
+        this._updateHelp();
+    }
+
+    _updateHelp() {
+        if (!this._helpEl) return;
+        if (this.state.smartphoneMode) {
+            this._helpEl.innerHTML = 'Drag=Pan &nbsp;·&nbsp; Pinch=Zoom &nbsp;·&nbsp; ☰=Toggle panel';
+        } else {
+            this._helpEl.innerHTML = 'Drag=Pan &nbsp;·&nbsp; Scroll/W/S=Zoom &nbsp;·&nbsp; Arrows=Pan &nbsp;·&nbsp; I=Toggle panel &nbsp;·&nbsp; F11=Fullscreen';
+        }
     }
 
     _syncInputs() {
@@ -513,6 +571,12 @@ export class UI {
             const btn = this._fields['maxiterMode_' + v];
             if (btn) btn.classList.toggle('active', this.state.maxiterMode === v);
         });
+
+        // Smartphone mode buttons
+        [['Off', false], ['On', true]].forEach(([label, value]) => {
+            const btn = this._fields['smartphone_' + label];
+            if (btn) btn.classList.toggle('active', this.state.smartphoneMode === value);
+        });
     }
 
     update(state) {
@@ -528,5 +592,6 @@ export class UI {
 
     destroy() {
         if (this._panel && this._panel.parentNode) this._panel.parentNode.removeChild(this._panel);
+        if (this._floatBtn && this._floatBtn.parentNode) this._floatBtn.parentNode.removeChild(this._floatBtn);
     }
 }

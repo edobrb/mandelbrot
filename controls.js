@@ -93,9 +93,12 @@ export class Controls {
         this._keys[e.key] = true;
         const s = this.state;
 
+        const tag = document.activeElement?.tagName;
+        const isTyping = tag === 'INPUT' || tag === 'TEXTAREA';
+
         switch (e.key) {
             case 'i': case 'I':
-                if (this._onToggleOverlay) this._onToggleOverlay();
+                if (!isTyping && this._onToggleOverlay) this._onToggleOverlay();
                 break;
             case 'F11':
                 e.preventDefault();
@@ -120,12 +123,13 @@ export class Controls {
         const aspect = this.canvas.width / this.canvas.height;
         const vpX = s.viewportSizeY * aspect;
 
-        let changed = false;
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-        if (this._keys['ArrowLeft'])  { this._offsetCenter(-vpX * this.settings.panSpeed, 0); changed = true; }
-        if (this._keys['ArrowRight']) { this._offsetCenter(vpX * this.settings.panSpeed, 0); changed = true; }
-        if (this._keys['ArrowUp'])    { this._offsetCenter(0, -s.viewportSizeY * this.settings.panSpeed); changed = true; }
-        if (this._keys['ArrowDown'])  { this._offsetCenter(0, s.viewportSizeY * this.settings.panSpeed); changed = true; }
+        if (this._keys['ArrowLeft'])  { this._offsetCenter(-vpX * this.settings.panSpeed, 0); }
+        if (this._keys['ArrowRight']) { this._offsetCenter(vpX * this.settings.panSpeed, 0); }
+        if (this._keys['ArrowUp'])    { this._offsetCenter(0, -s.viewportSizeY * this.settings.panSpeed); }
+        if (this._keys['ArrowDown'])  { this._offsetCenter(0, s.viewportSizeY * this.settings.panSpeed); }
 
         if (this._keys['w'] || this._keys['W']) { s.viewportSizeY *= this.settings.keyZoomSpeed; s.dirty = true; }
         if (this._keys['s'] || this._keys['S']) { s.viewportSizeY /= this.settings.keyZoomSpeed; s.dirty = true; }

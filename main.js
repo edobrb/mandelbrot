@@ -172,6 +172,7 @@ async function main() {
 
     let fpsFrames = 0;
     let fpsTime = performance.now();
+    let gpuBusy = false;
 
     function loop() {
         requestAnimationFrame(loop);
@@ -204,12 +205,18 @@ async function main() {
             state.dirty = true;
         }
 
-        // Only render when something changed
-        if (state.dirty) {
+        // Only render when something changed AND the GPU has finished the last frame.
+        // Without this guard, rAF floods the GPU queue (each submit stacks up before
+        // the previous dispatch finishes), causing runaway latency — especially visible
+        // when the UI panel is hidden and the browser compositor no longer provides
+        // implicit back-pressure via backdrop-filter compositing.
+        if (state.dirty && !gpuBusy) {
             const aspect = state.width / state.height;
             const vpX = state.viewportSizeY * aspect;
 
+            gpuBusy = true;
             renderer.render(vpX, state.viewportSizeY, refOrbit.length, state.maxIter, settings.colorPeriod);
+            renderer.device.queue.onSubmittedWorkDone().then(() => { gpuBusy = false; });
             state.dirty = false;
         }
 

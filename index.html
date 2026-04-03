@@ -3,7 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mandelbrot — WebGPU</title>
+
+    <title>Mandelbrot Set Explorer — Interactive Deep Zoom with WebGPU</title>
+    <meta name="description" content="Explore the Mandelbrot set in real time with unlimited deep zoom. Runs entirely in your browser using WebGPU and perturbation theory for arbitrary precision. No install required.">
+    <meta name="keywords" content="Mandelbrot set, fractal explorer, deep zoom, WebGPU, interactive fractal, Mandelbrot zoom, fractal viewer, complex plane, browser fractal">
+    <meta name="author" content="Edoardo Barbieri">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://edobrb.github.io/mandelbrot/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://edobrb.github.io/mandelbrot/">
+    <meta property="og:title" content="Mandelbrot Set Explorer — Interactive Deep Zoom with WebGPU">
+    <meta property="og:description" content="Explore the Mandelbrot set in real time with unlimited deep zoom. Runs entirely in your browser using WebGPU and perturbation theory for arbitrary precision.">
+    <meta property="og:image" content="https://edobrb.github.io/mandelbrot/screen.jpg">
+    <meta property="og:image:alt" content="Deep zoom into the Mandelbrot set rendered with WebGPU">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:site_name" content="Mandelbrot Set Explorer">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://edobrb.github.io/mandelbrot/">
+    <meta name="twitter:title" content="Mandelbrot Set Explorer — Interactive Deep Zoom with WebGPU">
+    <meta name="twitter:description" content="Explore the Mandelbrot set in real time with unlimited deep zoom. Runs entirely in your browser using WebGPU.">
+    <meta name="twitter:image" content="https://edobrb.github.io/mandelbrot/screen.jpg">
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Mandelbrot Set Explorer",
+      "url": "https://edobrb.github.io/mandelbrot/",
+      "description": "Interactive Mandelbrot set explorer with unlimited deep zoom, running in the browser via WebGPU and perturbation theory.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires a browser with WebGPU support (Chrome 113+, Edge 113+)",
+      "author": {
+        "@type": "Person",
+        "name": "Edoardo Barbieri"
+      },
+      "image": "https://edobrb.github.io/mandelbrot/screen.jpg",
+      "isAccessibleForFree": true,
+      "keywords": "Mandelbrot, fractal, deep zoom, WebGPU, interactive, complex plane"
+    }
+    </script>
+
     <link rel="stylesheet" href="style.css">
 </head>
 <body>

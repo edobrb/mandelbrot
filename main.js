@@ -47,7 +47,11 @@ async function main() {
         return;
     }
 
-    const settings = { ...defaultSettings };
+    const settings = {
+        ...defaultSettings,
+        colors:  defaultSettings.colors.map(c => ({ ...c })),
+        weights: [...defaultSettings.weights],
+    };
 
     // Apply saved settings over defaults
     const saved = loadSavedSettings();

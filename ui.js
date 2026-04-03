@@ -87,6 +87,7 @@ export class UI {
             ['centerX', 'Center X'],
             ['centerY', 'Center Y'],
             ['zoom',    'Zoom'],
+            ['iters',   'Iterations'],
             ['fps',     'FPS'],
             ['res',     'Resolution'],
         ]) {
@@ -586,6 +587,7 @@ export class UI {
         this._fields.centerY.textContent = state.centerBF_Y
             ? state.centerBF_Y.toDecimalString(40) : state.centerY.toFixed(17);
         this._fields.zoom.textContent = `10^${(-Math.log10(state.viewportSizeY)).toFixed(1)}`;
+        this._fields.iters.textContent = String(state.maxIter);
         this._fields.fps.textContent = String(state.fps);
         this._fields.res.textContent = `${state.width} × ${state.height}`;
     }

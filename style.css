@@ -49,12 +49,12 @@ html, body {
     position: fixed;
     top: 12px;
     left: 12px;
-    background: rgba(10, 10, 10, 0.88);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 10px;
-    padding: 12px 14px 10px;
+    background: rgba(12, 12, 14, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px;
     z-index: 50;
     pointer-events: auto;
     font-size: 12px;
@@ -63,20 +63,21 @@ html, body {
     max-height: calc(100vh - 24px);
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,0.12) transparent;
-    color: #bbb;
+    scrollbar-color: rgba(255,255,255,0.10) transparent;
+    color: #b0b0b0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 .dashboard.hidden { display: none; }
 
 /* Section dividers */
 .dash-divider {
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #555;
-    margin: 10px 0 6px;
-    padding-bottom: 3px;
+    color: rgba(255, 255, 255, 0.28);
+    margin: 14px 0 8px;
+    padding-bottom: 6px;
     border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
@@ -84,35 +85,38 @@ html, body {
 .dash-stats {
     display: grid;
     grid-template-columns: auto 1fr;
-    column-gap: 10px;
-    row-gap: 1px;
+    column-gap: 12px;
+    row-gap: 4px;
+    padding: 2px 0;
 }
 .stat-label {
-    color: #666;
+    color: rgba(255, 255, 255, 0.35);
     font-size: 11px;
     white-space: nowrap;
+    line-height: 1.6;
 }
 .stat-value {
-    color: #999;
+    color: rgba(255, 255, 255, 0.65);
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     font-size: 11px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.6;
 }
 
 /* Setting rows */
 .dash-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 5px;
+    gap: 10px;
+    margin-bottom: 8px;
 }
 .dash-row--wrap { flex-wrap: wrap; }
 
 .dash-label {
-    color: #888;
-    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11.5px;
     white-space: nowrap;
     flex-shrink: 0;
     width: 120px;
@@ -121,24 +125,29 @@ html, body {
 /* Segmented control */
 .seg-control {
     display: flex;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 5px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
     overflow: hidden;
+    padding: 3px;
+    gap: 2px;
 }
 .seg-btn {
     flex: 1;
     background: transparent;
     border: none;
-    color: #777;
-    font-size: 11px;
-    padding: 3px 0;
+    color: rgba(255,255,255,0.4);
+    font-size: 11.5px;
+    padding: 6px 12px;
     cursor: pointer;
-    transition: background 0.1s, color 0.1s;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
 }
-.seg-btn + .seg-btn { border-left: 1px solid rgba(255,255,255,0.12); }
+.seg-btn + .seg-btn { border-left: none; }
 .seg-btn.active {
-    background: rgba(255,255,255,0.12);
-    color: #ddd;
+    background: rgba(255,255,255,0.14);
+    color: #e8e8e8;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
 .seg-btn:hover:not(.active) { background: rgba(255,255,255,0.06); }
 
@@ -146,112 +155,116 @@ html, body {
 .dash-slider-group {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
     flex: 1;
     min-width: 0;
 }
 .dash-slider {
     flex: 1;
     height: 3px;
-    accent-color: #777;
+    accent-color: rgba(255,255,255,0.5);
     cursor: pointer;
     min-width: 0;
 }
 .dash-number {
     width: 54px;
     flex-shrink: 0;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 5px;
     color: #ccc;
     font-size: 11px;
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    padding: 2px 4px;
+    padding: 3px 6px;
     text-align: right;
     outline: none;
+    transition: border-color 0.15s;
 }
-.dash-number:focus { border-color: rgba(255,255,255,0.28); }
+.dash-number:focus { border-color: rgba(255,255,255,0.30); }
 
 /* Gradient preview */
 .gradient-preview {
     display: block;
     width: 100%;
-    height: 14px;
-    border-radius: 3px;
-    border: 1px solid rgba(255,255,255,0.10);
-    margin-bottom: 6px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 8px;
 }
 
 /* Color stops */
 .color-stops {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 5px;
     flex: 1;
 }
 .color-swatch {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     border: none;
-    border-radius: 4px;
+    border-radius: 5px;
     padding: 0;
     cursor: pointer;
     background: none;
+    transition: transform 0.1s;
 }
+.color-swatch:hover { transform: scale(1.1); }
 .color-swatch::-webkit-color-swatch-wrapper { padding: 0; }
-.color-swatch::-webkit-color-swatch { border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); }
+.color-swatch::-webkit-color-swatch { border-radius: 5px; border: 1px solid rgba(255,255,255,0.15); }
 
 /* Sublabel */
 .dash-sublabel {
     font-size: 10px;
-    color: #555;
-    margin: 5px 0 3px;
+    color: rgba(255,255,255,0.25);
+    margin: 8px 0 5px;
 }
 
 /* Segment weights */
 .weights-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px;
+    gap: 4px;
     margin-bottom: 4px;
 }
 .weight-input {
     width: 42px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 5px;
     color: #ccc;
     font-size: 11px;
-    padding: 2px 3px;
+    padding: 3px 4px;
     text-align: center;
     outline: none;
+    transition: border-color 0.15s;
 }
-.weight-input:focus { border-color: rgba(255,255,255,0.28); }
+.weight-input:focus { border-color: rgba(255,255,255,0.30); }
 
 /* Generic buttons */
 .dash-btn {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.13);
-    border-radius: 5px;
-    color: #bbb;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 6px;
+    color: #b0b0b0;
     font-size: 11px;
-    padding: 3px 9px;
+    padding: 5px 10px;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.1s;
+    transition: background 0.15s, border-color 0.15s;
 }
-.dash-btn:hover { background: rgba(255,255,255,0.13); }
-.dash-btn--danger { color: #d07070; border-color: rgba(200,70,70,0.22); }
-.dash-btn--danger:hover { background: rgba(200,70,70,0.14); }
+.dash-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.16); }
+.dash-btn--danger { color: #c06060; border-color: rgba(200,70,70,0.18); }
+.dash-btn--danger:hover { background: rgba(200,70,70,0.12); border-color: rgba(200,70,70,0.28); }
 .dash-btn--go {
-    padding: 3px 7px;
+    padding: 5px 8px;
     color: #6bc;
-    border-color: rgba(80,180,220,0.2);
+    border-color: rgba(80,180,220,0.18);
     flex-shrink: 0;
 }
-.dash-btn--go:hover { background: rgba(80,180,220,0.10); }
+.dash-btn--go:hover { background: rgba(80,180,220,0.10); border-color: rgba(80,180,220,0.28); }
 .dash-btn--icon {
-    padding: 2px 6px;
+    padding: 3px 7px;
     font-size: 13px;
     line-height: 1.2;
     flex-shrink: 0;
@@ -261,33 +274,36 @@ html, body {
 .dash-text-input {
     flex: 1;
     min-width: 0;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 5px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 6px;
     color: #ccc;
     font-size: 12px;
-    padding: 3px 7px;
+    padding: 5px 8px;
     outline: none;
+    transition: border-color 0.15s;
 }
-.dash-text-input:focus { border-color: rgba(255,255,255,0.28); }
+.dash-text-input:focus { border-color: rgba(255,255,255,0.30); }
 
 /* Bookmarks */
 .bookmarks-list {
-    margin-top: 5px;
+    margin-top: 6px;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
 }
-.bookmarks-empty { font-size: 11px; color: #555; padding: 2px 0; }
+.bookmarks-empty { font-size: 11px; color: rgba(255,255,255,0.25); padding: 4px 0; }
 .bookmark-row {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 5px;
-    padding: 4px 7px;
+    border-radius: 6px;
+    padding: 6px 8px;
+    transition: background 0.1s;
 }
+.bookmark-row:hover { background: rgba(255,255,255,0.05); }
 .bookmark-info { flex: 1; min-width: 0; }
 .bookmark-name {
     font-size: 12px;
@@ -298,26 +314,26 @@ html, body {
 }
 .bookmark-zoom {
     font-size: 10px;
-    color: #555;
+    color: rgba(255,255,255,0.3);
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 }
 
 /* Action bar */
 .action-bar {
     display: flex;
-    gap: 5px;
-    margin-top: 10px;
-    padding-top: 8px;
+    gap: 6px;
+    margin-top: 14px;
+    padding-top: 10px;
     border-top: 1px solid rgba(255,255,255,0.06);
 }
 .action-btn { flex: 1; justify-content: center; text-align: center; }
 
 /* Help */
 .dash-help {
-    margin-top: 8px;
+    margin-top: 10px;
     font-size: 10px;
-    color: #444;
-    line-height: 1.6;
+    color: rgba(255,255,255,0.22);
+    line-height: 1.7;
 }
 
 /* ---------- Floating toggle button (smartphone mode) ---------- */
@@ -330,21 +346,22 @@ html, body {
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: rgba(10, 10, 10, 0.88);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(12, 12, 14, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: #ccc;
     font-size: 20px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
     touch-action: manipulation;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 .float-toggle-btn:hover,
-.float-toggle-btn.panel-open { background: rgba(60, 60, 60, 0.92); color: #fff; }
+.float-toggle-btn.panel-open { background: rgba(50, 50, 55, 0.95); color: #fff; border-color: rgba(255,255,255,0.2); }
 
 /* ---------- Utility ---------- */
 

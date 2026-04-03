@@ -76,7 +76,9 @@ export function buildColorLUT(colorPeriod, colors, weights, gradientFn) {
         const c = getLinearGradient(i, 0, colorPeriod - 1, colors, weights, gradientFn);
         lut[i] = packRGBA(c.r, c.g, c.b, c.a);
     }
-    lut[colorPeriod] = packRGBA(0, 0, 0, 255); // inside color: black
+    // Inside color: use the last color stop from the palette
+    const inside = colors[colors.length - 1];
+    lut[colorPeriod] = packRGBA(inside.r, inside.g, inside.b, inside.a);
     return lut;
 }
 

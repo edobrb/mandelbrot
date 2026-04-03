@@ -1,5 +1,7 @@
 # Mandelbrot Set Visualizer
 
+![Preview](screen.png)
+
 Real-time Mandelbrot set explorer running in the browser using **WebGPU** and perturbation theory for deep zoom with arbitrary precision.
 
 ## Requirements
@@ -47,7 +49,3 @@ Open with `I` (desktop) or the ☰ button (smartphone mode).
 
 Settings are persisted to `localStorage` via **Save settings**.
 
-## Screenshots
-
-![Preview](screen.jpg)
-[More in high resolution (Google Drive)](https://drive.google.com/drive/folders/1BXczlQU5Tz98VtBfL1rYTEiUtj2X5KoT?usp=sharing)

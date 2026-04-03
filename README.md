@@ -2,6 +2,8 @@
 
 ![Preview](screen.png)
 
+[https://edobrb.github.io/mandelbrot](https://edobrb.github.io/mandelbrot)
+
 Real-time Mandelbrot set explorer running in the browser using **WebGPU** and perturbation theory for deep zoom with arbitrary precision.
 
 ## Requirements

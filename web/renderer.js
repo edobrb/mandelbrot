@@ -1,11 +1,10 @@
 /**
  * renderer.js — WebGPU setup, pipelines, buffer management, render dispatch.
  *
- * Compute shader writes u32-packed RGBA pixels to a storage buffer.
- * A fullscreen-triangle render pass unpacks and displays them.
+ * Uses perturbation theory: a single reference orbit (computed on CPU at
+ * arbitrary precision) is uploaded to the GPU, and each pixel computes
+ * only its lightweight f32 delta orbit.
  */
-
-import { buildColorLUT } from './colors.js';
 
 // ---------- Render shader (inline WGSL) ----------
 
@@ -22,7 +21,6 @@ struct RenderParams {
 
 @vertex
 fn vs(@builtin(vertex_index) vi : u32) -> @builtin(position) vec4<f32> {
-    // Fullscreen triangle covering entire clip space
     let x = f32(i32(vi & 1u)) * 4.0 - 1.0;
     let y = f32(i32(vi >> 1u)) * 4.0 - 1.0;
     return vec4<f32>(x, y, 0.0, 1.0);
@@ -40,7 +38,6 @@ fn fs(@builtin(position) pos : vec4<f32>) -> @location(0) vec4<f32> {
     let idx = y * rp.width + x;
     let packed = pixels[idx];
 
-    // Unpack ABGR u32 → RGBA float channels
     let r = f32(packed & 0xFFu) / 255.0;
     let g = f32((packed >> 8u)  & 0xFFu) / 255.0;
     let b = f32((packed >> 16u) & 0xFFu) / 255.0;
@@ -50,14 +47,6 @@ fn fs(@builtin(position) pos : vec4<f32>) -> @location(0) vec4<f32> {
 }
 `;
 
-// ---------- Helpers ----------
-
-function splitDouble(val) {
-    const hi = Math.fround(val);
-    const lo = Math.fround(val - hi);
-    return [hi, lo];
-}
-
 // ---------- Renderer class ----------
 
 export class Renderer {
@@ -66,23 +55,29 @@ export class Renderer {
         this.device = null;
         this.context = null;
         this.format = null;
+
+        // Pipelines
         this.computePipeline = null;
         this.renderPipeline = null;
 
+        // Buffers
         this.computeParamsBuffer = null;
+        this.refOrbitReBuffer = null;
+        this.refOrbitImBuffer = null;
         this.colorLUTBuffer = null;
         this.pixelBuffer = null;
         this.renderParamsBuffer = null;
 
+        // Bind groups
         this.computeBindGroup = null;
         this.renderBindGroup = null;
-
         this.computeBindGroupLayout = null;
         this.renderBindGroupLayout = null;
 
         this.width = 0;
         this.height = 0;
         this.currentMaxIter = 0;
+        this.currentRefOrbitCapacity = 0;
     }
 
     async init() {
@@ -113,15 +108,17 @@ export class Renderer {
     }
 
     async _createPipelines() {
-        // ----- Compute pipeline -----
-        const computeShaderSrc = await fetch('mandelbrot.wgsl').then((r) => r.text());
+        // ----- Perturbation compute pipeline -----
+        const computeShaderSrc = await fetch('mandelbrot_perturb.wgsl').then((r) => r.text());
         const computeModule = this.device.createShaderModule({ code: computeShaderSrc });
 
         this.computeBindGroupLayout = this.device.createBindGroupLayout({
             entries: [
                 { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
                 { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-                { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+                { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
             ],
         });
 
@@ -130,7 +127,7 @@ export class Renderer {
             compute: { module: computeModule, entryPoint: 'main' },
         });
 
-        // ----- Render pipeline -----
+        // ----- Render pipeline (same as before) -----
         const renderModule = this.device.createShaderModule({ code: RENDER_SHADER });
 
         this.renderBindGroupLayout = this.device.createBindGroupLayout({
@@ -153,7 +150,7 @@ export class Renderer {
     }
 
     _createStaticBuffers() {
-        // Compute params uniform (48 bytes)
+        // Compute params uniform (48 bytes: 4 f32 + 8 u32)
         this.computeParamsBuffer = this.device.createBuffer({
             size: 48,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -179,9 +176,8 @@ export class Renderer {
 
         // Recreate pixel output buffer
         if (this.pixelBuffer) this.pixelBuffer.destroy();
-        const pixelCount = width * height;
         this.pixelBuffer = this.device.createBuffer({
-            size: pixelCount * 4,
+            size: width * height * 4,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
         });
 
@@ -207,15 +203,48 @@ export class Renderer {
         this._rebuildBindGroups();
     }
 
+    /**
+     * Upload the reference orbit to the GPU.
+     * @param {Float32Array} re - Real parts of reference orbit
+     * @param {Float32Array} im - Imaginary parts of reference orbit
+     * @param {number} length - Number of valid entries
+     */
+    updateRefOrbit(re, im, length) {
+        const byteSize = (length + 1) * 4; // +1 for safety
+        const needRealloc = byteSize > this.currentRefOrbitCapacity;
+
+        if (needRealloc) {
+            if (this.refOrbitReBuffer) this.refOrbitReBuffer.destroy();
+            if (this.refOrbitImBuffer) this.refOrbitImBuffer.destroy();
+
+            this.refOrbitReBuffer = this.device.createBuffer({
+                size: byteSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            });
+            this.refOrbitImBuffer = this.device.createBuffer({
+                size: byteSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            });
+            this.currentRefOrbitCapacity = byteSize;
+        }
+
+        this.device.queue.writeBuffer(this.refOrbitReBuffer, 0, re, 0, length + 1);
+        this.device.queue.writeBuffer(this.refOrbitImBuffer, 0, im, 0, length + 1);
+
+        if (needRealloc) this._rebuildBindGroups();
+    }
+
     _rebuildBindGroups() {
-        if (!this.pixelBuffer || !this.colorLUTBuffer) return;
+        if (!this.pixelBuffer || !this.colorLUTBuffer || !this.refOrbitReBuffer || !this.refOrbitImBuffer) return;
 
         this.computeBindGroup = this.device.createBindGroup({
             layout: this.computeBindGroupLayout,
             entries: [
                 { binding: 0, resource: { buffer: this.computeParamsBuffer } },
-                { binding: 1, resource: { buffer: this.colorLUTBuffer } },
-                { binding: 2, resource: { buffer: this.pixelBuffer } },
+                { binding: 1, resource: { buffer: this.refOrbitReBuffer } },
+                { binding: 2, resource: { buffer: this.refOrbitImBuffer } },
+                { binding: 3, resource: { buffer: this.colorLUTBuffer } },
+                { binding: 4, resource: { buffer: this.pixelBuffer } },
             ],
         });
 
@@ -229,30 +258,33 @@ export class Renderer {
     }
 
     /**
-     * Render a frame: dispatch compute shader, then draw fullscreen quad.
+     * Render a frame using perturbation theory.
      *
-     * @param {number} x0 - Left edge in complex plane
-     * @param {number} x1 - Right edge
-     * @param {number} y0 - Top edge
-     * @param {number} y1 - Bottom edge
+     * @param {number} viewportSizeX - Width of viewport in complex plane units
+     * @param {number} viewportSizeY - Height of viewport in complex plane units
+     * @param {number} refLength - Length of the reference orbit
      * @param {number} maxIter - Maximum iterations
      */
-    render(x0, x1, y0, y1, maxIter) {
+    render(viewportSizeX, viewportSizeY, refLength, maxIter, colorPeriod) {
         if (this.width === 0 || this.height === 0) return;
         if (!this.computeBindGroup || !this.renderBindGroup) return;
 
         // Write compute params
-        const [x0h, x0l] = splitDouble(x0);
-        const [x1h, x1l] = splitDouble(x1);
-        const [y0h, y0l] = splitDouble(y0);
-        const [y1h, y1l] = splitDouble(y1);
+        const buf = new ArrayBuffer(48);
+        const f = new Float32Array(buf, 0, 4);
+        const u = new Uint32Array(buf, 16, 8);
 
-        const paramsF = new Float32Array([x0h, x0l, x1h, x1l, y0h, y0l, y1h, y1l]);
-        const paramsU = new Uint32Array([this.width, this.height, maxIter, 0]);
-        const paramsBuf = new ArrayBuffer(48);
-        new Float32Array(paramsBuf, 0, 8).set(paramsF);
-        new Uint32Array(paramsBuf, 32, 4).set(paramsU);
-        this.device.queue.writeBuffer(this.computeParamsBuffer, 0, paramsBuf);
+        f[0] = this.width / 2;             // half_w
+        f[1] = this.height / 2;            // half_h
+        f[2] = Math.fround(viewportSizeX / this.width);   // scale_re
+        f[3] = Math.fround(viewportSizeY / this.height);  // scale_im
+        u[0] = this.width;                 // res_x
+        u[1] = this.height;                // res_y
+        u[2] = maxIter;                    // max_iter
+        u[3] = refLength;                  // ref_len
+        u[4] = colorPeriod;                // color_period
+
+        this.device.queue.writeBuffer(this.computeParamsBuffer, 0, buf);
 
         const encoder = this.device.createCommandEncoder();
 
@@ -284,11 +316,42 @@ export class Renderer {
         this.device.queue.submit([encoder.finish()]);
     }
 
+    /**
+     * Read the current pixel buffer from the GPU and return a PNG Blob.
+     * Reads pixelBuffer directly — works regardless of canvas swap state.
+     * Pixel format is packed uint32: bytes R, G, B, A (little-endian), matching ImageData.
+     */
+    async captureScreenshot() {
+        const w = this.width, h = this.height;
+        if (!this.pixelBuffer || w === 0 || h === 0) return null;
+
+        const readback = this.device.createBuffer({
+            size: w * h * 4,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+
+        const encoder = this.device.createCommandEncoder();
+        encoder.copyBufferToBuffer(this.pixelBuffer, 0, readback, 0, w * h * 4);
+        this.device.queue.submit([encoder.finish()]);
+
+        await readback.mapAsync(GPUMapMode.READ);
+        const pixels = new Uint8ClampedArray(readback.getMappedRange().slice(0));
+        readback.unmap();
+        readback.destroy();
+
+        const offscreen = new OffscreenCanvas(w, h);
+        const ctx = offscreen.getContext('2d');
+        ctx.putImageData(new ImageData(pixels, w, h), 0, 0);
+        return offscreen.convertToBlob({ type: 'image/png' });
+    }
+
     destroy() {
         if (this.computeParamsBuffer) this.computeParamsBuffer.destroy();
         if (this.renderParamsBuffer) this.renderParamsBuffer.destroy();
         if (this.colorLUTBuffer) this.colorLUTBuffer.destroy();
         if (this.pixelBuffer) this.pixelBuffer.destroy();
+        if (this.refOrbitReBuffer) this.refOrbitReBuffer.destroy();
+        if (this.refOrbitImBuffer) this.refOrbitImBuffer.destroy();
         this.device?.destroy();
     }
 }

@@ -1,5 +1,6 @@
 /**
  * main.js — Entry point, initialization, render loop.
+ * Uses perturbation theory with arbitrary-precision reference orbits.
  */
 
 import { defaultSettings } from './settings.js';
@@ -7,6 +8,9 @@ import { buildColorLUT } from './colors.js';
 import { Renderer } from './renderer.js';
 import { Controls } from './controls.js';
 import { UI } from './ui.js';
+import { BigFloat } from './bigfloat.js';
+import { computeReferenceOrbit } from './perturbation.js';
+import { loadSavedSettings } from './storage.js';
 
 // ---------- Dynamic max iterations ----------
 
@@ -17,23 +21,17 @@ function computeDynamicMaxIter(viewportSizeY, baseMaxIter) {
 
 // ---------- Screenshot ----------
 
-function takeScreenshot(canvas) {
-    const temp = document.createElement('canvas');
-    temp.width = canvas.width;
-    temp.height = canvas.height;
-    const ctx = temp.getContext('2d');
-    ctx.drawImage(canvas, 0, 0);
-    temp.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `mandelbrot_${Date.now()}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, 'image/png');
+async function takeScreenshot(renderer) {
+    const blob = await renderer.captureScreenshot();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mandelbrot_${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // ---------- Boot ----------
@@ -42,7 +40,6 @@ async function main() {
     const errorEl = document.getElementById('error-message');
     const canvas = document.getElementById('mandelbrot-canvas');
 
-    // Check WebGPU support
     if (!navigator.gpu) {
         errorEl.textContent = 'WebGPU is not supported in your browser. Please use a recent version of Chrome, Edge, or Firefox Nightly.';
         errorEl.classList.remove('hidden');
@@ -50,16 +47,32 @@ async function main() {
         return;
     }
 
-    // Shared state
     const settings = { ...defaultSettings };
+
+    // Apply saved settings over defaults
+    const saved = loadSavedSettings();
+    if (saved) {
+        if (saved.colors)              settings.colors = saved.colors;
+        if (saved.weights)             settings.weights = saved.weights;
+        if (saved.colorPeriod)         settings.colorPeriod = saved.colorPeriod;
+        if (saved.zoomSpeed)           settings.zoomSpeed = saved.zoomSpeed;
+        if (saved.panSpeed)            settings.panSpeed = saved.panSpeed;
+        if (saved.keyZoomSpeed)        settings.keyZoomSpeed = saved.keyZoomSpeed;
+        if (saved.maxIterAdjustFactor) settings.maxIterAdjustFactor = saved.maxIterAdjustFactor;
+    }
+
+    // Shared state — center is tracked in both BigFloat (precision) and f64 (display)
     const state = {
         centerX: settings.initialCenterX,
         centerY: settings.initialCenterY,
+        centerBF_X: BigFloat.fromNumber(settings.initialCenterX),
+        centerBF_Y: BigFloat.fromNumber(settings.initialCenterY),
         viewportSizeY: settings.initialViewportSizeY,
-        baseMaxIter: settings.initialMaxIter,
-        maxIter: settings.initialMaxIter,
-        maxiterMode: settings.maxiterMode,
+        baseMaxIter: saved?.baseMaxIter ?? settings.initialMaxIter,
+        maxIter: saved?.baseMaxIter ?? settings.initialMaxIter,
+        maxiterMode: saved?.maxiterMode ?? settings.maxiterMode,
         dirty: true,
+        refOrbitDirty: true,
         fps: 0,
         width: 0,
         height: 0,
@@ -76,17 +89,50 @@ async function main() {
         return;
     }
 
-    // Initialize controls
     const controls = new Controls(canvas, state, settings);
 
-    // Initialize UI
-    const ui = new UI(document.getElementById('ui-container'), settings);
+    function navigateTo(x, y, viewport) {
+        state.centerBF_X = BigFloat.fromString(x);
+        state.centerBF_Y = BigFloat.fromString(y);
+        state.centerX = state.centerBF_X.toNumber();
+        state.centerY = state.centerBF_Y.toNumber();
+        state.viewportSizeY = viewport;
+        state.refOrbitDirty = true;
+        state.dirty = true;
+    }
+
+    const ui = new UI(
+        document.getElementById('ui-container'),
+        settings,
+        state,
+        {
+            navigateTo,
+            takeScreenshot: () => takeScreenshot(renderer),
+            defaultSettings,
+        },
+    );
     controls.onToggleOverlay(() => ui.toggle());
-    controls.onScreenshot(() => takeScreenshot(canvas));
+    controls.onScreenshot(() => takeScreenshot(renderer));
+
+    // ---------- Reference orbit cache ----------
+
+    let refOrbit = null;
+    let refOrbitMaxIter = -1;
+    let lastLUTMaxIter = -1;
+    let lastColorPeriod = -1;
+    let lastColorVersion = -1;
+
+    function updateRefOrbit(maxIter) {
+        const t0 = performance.now();
+        refOrbit = computeReferenceOrbit(state.centerBF_X, state.centerBF_Y, maxIter);
+        refOrbitMaxIter = maxIter;
+        renderer.updateRefOrbit(refOrbit.re, refOrbit.im, refOrbit.length);
+        state.refOrbitDirty = false;
+        const dt = performance.now() - t0;
+        if (dt > 50) console.log(`Reference orbit: ${refOrbit.length} iters in ${dt.toFixed(1)}ms`);
+    }
 
     // ---------- Sizing ----------
-
-    let lastLUTMaxIter = -1;
 
     function handleResize() {
         const dpr = window.devicePixelRatio || 1;
@@ -120,11 +166,21 @@ async function main() {
             state.maxIter = state.baseMaxIter;
         }
 
-        // Rebuild color LUT when maxIter changes
-        if (state.maxIter !== lastLUTMaxIter) {
-            const lut = buildColorLUT(state.maxIter, settings.colors, settings.weights, settings.gradientFunction);
-            renderer.updateColorLUT(lut, state.maxIter);
+        // Rebuild color LUT when colorPeriod or gradient colors change
+        const colorVersion = settings._colorVersion || 0;
+        if (state.maxIter !== lastLUTMaxIter || settings.colorPeriod !== lastColorPeriod || colorVersion !== lastColorVersion) {
+            const lut = buildColorLUT(settings.colorPeriod, settings.colors, settings.weights, settings.gradientFunction);
+            renderer.updateColorLUT(lut, settings.colorPeriod);
             lastLUTMaxIter = state.maxIter;
+            lastColorPeriod = settings.colorPeriod;
+            lastColorVersion = colorVersion;
+            state.refOrbitDirty = true;
+            state.dirty = true;
+        }
+
+        // Recompute reference orbit when needed
+        if (state.refOrbitDirty || refOrbitMaxIter !== state.maxIter) {
+            updateRefOrbit(state.maxIter);
             state.dirty = true;
         }
 
@@ -132,12 +188,8 @@ async function main() {
         if (state.dirty) {
             const aspect = state.width / state.height;
             const vpX = state.viewportSizeY * aspect;
-            const x0 = state.centerX - vpX / 2;
-            const x1 = state.centerX + vpX / 2;
-            const y0 = state.centerY - state.viewportSizeY / 2;
-            const y1 = state.centerY + state.viewportSizeY / 2;
 
-            renderer.render(x0, x1, y0, y1, state.maxIter);
+            renderer.render(vpX, state.viewportSizeY, refOrbit.length, state.maxIter, settings.colorPeriod);
             state.dirty = false;
         }
 

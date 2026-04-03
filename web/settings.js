@@ -2,7 +2,7 @@ export const defaultSettings = {
     initialCenterX: 0.261750402076009,
     initialCenterY: 0.0020502675513626,
     initialViewportSizeY: 1.15,
-    initialMaxIter: 500,
+    initialMaxIter: 1000,
 
     maxiterMode: 'Dynamic',
 
@@ -18,6 +18,8 @@ export const defaultSettings = {
     weights: [1.0, 1.0, 1.0, 1.0, 1.0],
 
     gradientFunction: (x) => Math.log(x * 9 + 1) / Math.log(10),
+
+    colorPeriod: 128,   // number of iterations before the color palette cycles
 
     zoomSpeed: 0.85,
     panSpeed: 0.05,

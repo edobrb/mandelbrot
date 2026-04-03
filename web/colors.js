@@ -69,13 +69,83 @@ export function getLinearGradient(v, minV, maxV, colors, weights, gradientFn) {
  * @param {Function} gradientFn - Non-linear gradient mapping
  * @returns {Uint32Array} LUT of length maxIter + 1
  */
-export function buildColorLUT(maxIter, colors, weights, gradientFn) {
-    const lut = new Uint32Array(maxIter + 1);
-    for (let i = 0; i <= maxIter; i++) {
-        const c = getLinearGradient(i, 0, maxIter, colors, weights, gradientFn);
+export function buildColorLUT(colorPeriod, colors, weights, gradientFn) {
+    // colorPeriod entries for the cycle, +1 for the inside (non-escaped) color
+    const lut = new Uint32Array(colorPeriod + 1);
+    for (let i = 0; i < colorPeriod; i++) {
+        const c = getLinearGradient(i, 0, colorPeriod - 1, colors, weights, gradientFn);
         lut[i] = packRGBA(c.r, c.g, c.b, c.a);
     }
+    lut[colorPeriod] = packRGBA(0, 0, 0, 255); // inside color: black
     return lut;
+}
+
+/**
+ * Generate a random aesthetically-pleasing color palette.
+ *
+ * Rules that make Mandelbrot palettes look good:
+ *  - Start and end dark (continuity when the cycle wraps)
+ *  - Harmonious hue relationships (analogous / triadic / split-complementary)
+ *  - Vivid, saturated midtones — muted stops kill contrast
+ *  - 4-6 stops: enough variety, not noisy
+ *
+ * Returns { colors, weights, colorPeriod }.
+ */
+export function randomPalette() {
+    const rand  = (a, b) => a + Math.random() * (b - a);
+    const pick  = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    // Convert HSL (h:0-360, s/l:0-1) to {r,g,b,a}
+    function hsl(h, s, l) {
+        h = ((h % 360) + 360) % 360 / 360;
+        s = Math.max(0, Math.min(1, s));
+        l = Math.max(0, Math.min(1, l));
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs((h * 6) % 2 - 1));
+        const m = l - c / 2;
+        let r, g, b;
+        const h6 = h * 6;
+        if      (h6 < 1) { r = c; g = x; b = 0; }
+        else if (h6 < 2) { r = x; g = c; b = 0; }
+        else if (h6 < 3) { r = 0; g = c; b = x; }
+        else if (h6 < 4) { r = 0; g = x; b = c; }
+        else if (h6 < 5) { r = x; g = 0; b = c; }
+        else             { r = c; g = 0; b = x; }
+        return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255), a: 255 };
+    }
+
+    const baseHue = rand(0, 360);
+
+    // Hue relationships for the mid-stop colors
+    const keyHues = pick([
+        [baseHue, baseHue + 30, baseHue + 60],                    // analogous
+        [baseHue, baseHue + 120, baseHue + 240],                   // triadic
+        [baseHue, baseHue + 150, baseHue + 210],                   // split-complementary
+        [baseHue, baseHue + 180],                                  // complementary
+        [baseHue, baseHue + 30, baseHue + 180, baseHue + 210],     // double complementary
+    ]);
+
+    const n = pick([4, 4, 5, 5, 6]); // weighted toward 4-5
+    const colors = [];
+
+    // First stop — very dark, slight tint of base hue
+    colors.push(hsl(baseHue, rand(0.2, 0.6), rand(0.03, 0.09)));
+
+    // Middle stops — vivid, using the key hues
+    for (let i = 1; i < n - 1; i++) {
+        const hue = keyHues[i % keyHues.length] + rand(-12, 12);
+        const sat = rand(0.70, 1.00);
+        const lit = rand(0.28, 0.62);
+        colors.push(hsl(hue, sat, lit));
+    }
+
+    // Last stop — dark again so the cycle wraps smoothly
+    colors.push(hsl(keyHues[keyHues.length - 1], rand(0.1, 0.5), rand(0.03, 0.09)));
+
+    const weights    = Array(n - 1).fill(1.0);
+    const colorPeriod = pick([96, 128, 192, 256, 384, 512]);
+
+    return { colors, weights, colorPeriod };
 }
 
 /**

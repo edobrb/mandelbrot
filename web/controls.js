@@ -2,7 +2,10 @@
  * controls.js — Input handling: mouse, keyboard, and touch.
  *
  * Mutates a shared state object and sets state.dirty = true on changes.
+ * Center coordinates are tracked in BigFloat for arbitrary precision zoom.
  */
+
+import { BigFloat } from './bigfloat.js';
 
 export class Controls {
     constructor(canvas, state, settings) {
@@ -10,39 +13,62 @@ export class Controls {
         this.state = state;
         this.settings = settings;
 
-        // Keyboard state
         this._keys = {};
 
         // Mouse drag state
         this._dragging = false;
         this._dragStartX = 0;
         this._dragStartY = 0;
-        this._dragStartCenterX = 0;
-        this._dragStartCenterY = 0;
+        this._dragStartCenterBF_X = null;
+        this._dragStartCenterBF_Y = null;
         this._dragMoved = false;
 
         // Touch state
         this._activeTouches = new Map();
         this._pinchStartDist = 0;
         this._pinchStartMid = { x: 0, y: 0 };
-        this._pinchStartCenter = { x: 0, y: 0 };
+        this._pinchStartCenterBF_X = null;
+        this._pinchStartCenterBF_Y = null;
         this._pinchStartViewport = 0;
         this._singleTouchStart = null;
-        this._singleTouchCenter = null;
+        this._singleTouchCenterBF_X = null;
+        this._singleTouchCenterBF_Y = null;
 
         this._bindEvents();
+    }
+
+    /**
+     * Update the BigFloat center and sync f64 approximation.
+     */
+    _setCenter(bfX, bfY) {
+        const s = this.state;
+        s.centerBF_X = bfX;
+        s.centerBF_Y = bfY;
+        s.centerX = bfX.toNumber();
+        s.centerY = bfY.toNumber();
+        s.refOrbitDirty = true;
+        s.dirty = true;
+    }
+
+    /**
+     * Offset the BigFloat center by f64 delta values.
+     */
+    _offsetCenter(dx, dy) {
+        const s = this.state;
+        this._setCenter(
+            s.centerBF_X.add(BigFloat.fromNumber(dx)),
+            s.centerBF_Y.add(BigFloat.fromNumber(dy)),
+        );
     }
 
     _bindEvents() {
         const c = this.canvas;
 
-        // --- Keyboard ---
         this._onKeyDown = (e) => this._handleKeyDown(e);
         this._onKeyUp = (e) => this._handleKeyUp(e);
         window.addEventListener('keydown', this._onKeyDown);
         window.addEventListener('keyup', this._onKeyUp);
 
-        // --- Mouse ---
         this._onWheel = (e) => this._handleWheel(e);
         this._onMouseDown = (e) => this._handleMouseDown(e);
         this._onMouseMove = (e) => this._handleMouseMove(e);
@@ -52,7 +78,6 @@ export class Controls {
         window.addEventListener('mousemove', this._onMouseMove);
         window.addEventListener('mouseup', this._onMouseUp);
 
-        // --- Touch ---
         this._onTouchStart = (e) => this._handleTouchStart(e);
         this._onTouchMove = (e) => this._handleTouchMove(e);
         this._onTouchEnd = (e) => this._handleTouchEnd(e);
@@ -66,22 +91,10 @@ export class Controls {
 
     _handleKeyDown(e) {
         this._keys[e.key] = true;
-
         const s = this.state;
 
         switch (e.key) {
-            case 'm':
-            case 'M':
-                s.baseMaxIter = Math.ceil(s.baseMaxIter * this.settings.maxIterAdjustFactor);
-                s.dirty = true;
-                break;
-            case 'n':
-            case 'N':
-                s.baseMaxIter = Math.max(10, Math.ceil(s.baseMaxIter / this.settings.maxIterAdjustFactor));
-                s.dirty = true;
-                break;
-            case 'i':
-            case 'I':
+            case 'i': case 'I':
                 if (this._onToggleOverlay) this._onToggleOverlay();
                 break;
             case 'F11':
@@ -95,21 +108,13 @@ export class Controls {
         }
     }
 
-    _handleKeyUp(e) {
-        this._keys[e.key] = false;
-    }
+    _handleKeyUp(e) { this._keys[e.key] = false; }
 
     _toggleFullscreen() {
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        } else {
-            document.documentElement.requestFullscreen().catch(() => {});
-        }
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen().catch(() => {});
     }
 
-    /**
-     * Called once per frame to apply held-key actions.
-     */
     update() {
         const s = this.state;
         const aspect = this.canvas.width / this.canvas.height;
@@ -117,17 +122,13 @@ export class Controls {
 
         let changed = false;
 
-        // Pan with arrow keys
-        if (this._keys['ArrowLeft'])  { s.centerX -= vpX * this.settings.panSpeed; changed = true; }
-        if (this._keys['ArrowRight']) { s.centerX += vpX * this.settings.panSpeed; changed = true; }
-        if (this._keys['ArrowUp'])    { s.centerY -= s.viewportSizeY * this.settings.panSpeed; changed = true; }
-        if (this._keys['ArrowDown'])  { s.centerY += s.viewportSizeY * this.settings.panSpeed; changed = true; }
+        if (this._keys['ArrowLeft'])  { this._offsetCenter(-vpX * this.settings.panSpeed, 0); changed = true; }
+        if (this._keys['ArrowRight']) { this._offsetCenter(vpX * this.settings.panSpeed, 0); changed = true; }
+        if (this._keys['ArrowUp'])    { this._offsetCenter(0, -s.viewportSizeY * this.settings.panSpeed); changed = true; }
+        if (this._keys['ArrowDown'])  { this._offsetCenter(0, s.viewportSizeY * this.settings.panSpeed); changed = true; }
 
-        // Zoom with W / S
-        if (this._keys['w'] || this._keys['W']) { s.viewportSizeY *= this.settings.keyZoomSpeed; changed = true; }
-        if (this._keys['s'] || this._keys['S']) { s.viewportSizeY /= this.settings.keyZoomSpeed; changed = true; }
-
-        if (changed) s.dirty = true;
+        if (this._keys['w'] || this._keys['W']) { s.viewportSizeY *= this.settings.keyZoomSpeed; s.dirty = true; }
+        if (this._keys['s'] || this._keys['S']) { s.viewportSizeY /= this.settings.keyZoomSpeed; s.dirty = true; }
     }
 
     // --- Mouse handlers ---
@@ -144,8 +145,8 @@ export class Controls {
         this._dragMoved = false;
         this._dragStartX = e.clientX;
         this._dragStartY = e.clientY;
-        this._dragStartCenterX = this.state.centerX;
-        this._dragStartCenterY = this.state.centerY;
+        this._dragStartCenterBF_X = this.state.centerBF_X.clone();
+        this._dragStartCenterBF_Y = this.state.centerBF_Y.clone();
     }
 
     _handleMouseMove(e) {
@@ -158,27 +159,21 @@ export class Controls {
         const aspect = this.canvas.width / this.canvas.height;
         const vpX = s.viewportSizeY * aspect;
 
-        s.centerX = this._dragStartCenterX - (dx / this.canvas.clientWidth) * vpX;
-        s.centerY = this._dragStartCenterY - (dy / this.canvas.clientHeight) * s.viewportSizeY;
-        s.dirty = true;
+        const complexDx = -(dx / this.canvas.clientWidth) * vpX;
+        const complexDy = -(dy / this.canvas.clientHeight) * s.viewportSizeY;
+
+        this._setCenter(
+            this._dragStartCenterBF_X.add(BigFloat.fromNumber(complexDx)),
+            this._dragStartCenterBF_Y.add(BigFloat.fromNumber(complexDy)),
+        );
     }
 
     _handleMouseUp(e) {
         if (!this._dragging) return;
         this._dragging = false;
 
-        // Click-to-center if there was no significant drag
         if (!this._dragMoved) {
-            const s = this.state;
-            const aspect = this.canvas.width / this.canvas.height;
-            const vpX = s.viewportSizeY * aspect;
-
-            const normX = e.clientX / this.canvas.clientWidth;
-            const normY = e.clientY / this.canvas.clientHeight;
-
-            s.centerX = s.centerX + (normX - 0.5) * vpX;
-            s.centerY = s.centerY + (normY - 0.5) * s.viewportSizeY;
-            s.dirty = true;
+            this._zoomAtPoint(e.clientX, e.clientY, 1.0);
         }
     }
 
@@ -193,7 +188,8 @@ export class Controls {
         if (this._activeTouches.size === 1) {
             const t = [...this._activeTouches.values()][0];
             this._singleTouchStart = { x: t.x, y: t.y };
-            this._singleTouchCenter = { x: this.state.centerX, y: this.state.centerY };
+            this._singleTouchCenterBF_X = this.state.centerBF_X.clone();
+            this._singleTouchCenterBF_Y = this.state.centerBF_Y.clone();
         } else if (this._activeTouches.size === 2) {
             this._initPinch();
         }
@@ -207,11 +203,8 @@ export class Controls {
             }
         }
 
-        if (this._activeTouches.size === 2) {
-            this._handlePinch();
-        } else if (this._activeTouches.size === 1) {
-            this._handleSingleTouchDrag();
-        }
+        if (this._activeTouches.size === 2) this._handlePinch();
+        else if (this._activeTouches.size === 1) this._handleSingleTouchDrag();
     }
 
     _handleTouchEnd(e) {
@@ -221,7 +214,8 @@ export class Controls {
         if (this._activeTouches.size === 1) {
             const t = [...this._activeTouches.values()][0];
             this._singleTouchStart = { x: t.x, y: t.y };
-            this._singleTouchCenter = { x: this.state.centerX, y: this.state.centerY };
+            this._singleTouchCenterBF_X = this.state.centerBF_X.clone();
+            this._singleTouchCenterBF_Y = this.state.centerBF_Y.clone();
         }
     }
 
@@ -229,7 +223,8 @@ export class Controls {
         const pts = [...this._activeTouches.values()];
         this._pinchStartDist = this._dist(pts[0], pts[1]);
         this._pinchStartMid = this._mid(pts[0], pts[1]);
-        this._pinchStartCenter = { x: this.state.centerX, y: this.state.centerY };
+        this._pinchStartCenterBF_X = this.state.centerBF_X.clone();
+        this._pinchStartCenterBF_Y = this.state.centerBF_Y.clone();
         this._pinchStartViewport = this.state.viewportSizeY;
     }
 
@@ -241,19 +236,17 @@ export class Controls {
         const s = this.state;
         const aspect = this.canvas.width / this.canvas.height;
 
-        // Zoom: inverse ratio of distance change
         const factor = this._pinchStartDist / dist;
         s.viewportSizeY = this._pinchStartViewport * factor;
-        const vpX = s.viewportSizeY * aspect;
 
-        // Pan: delta of midpoint
         const dx = (mid.x - this._pinchStartMid.x) / this.canvas.clientWidth;
         const dy = (mid.y - this._pinchStartMid.y) / this.canvas.clientHeight;
         const startVpX = this._pinchStartViewport * aspect;
-        s.centerX = this._pinchStartCenter.x - dx * startVpX;
-        s.centerY = this._pinchStartCenter.y - dy * this._pinchStartViewport;
 
-        s.dirty = true;
+        this._setCenter(
+            this._pinchStartCenterBF_X.sub(BigFloat.fromNumber(dx * startVpX)),
+            this._pinchStartCenterBF_Y.sub(BigFloat.fromNumber(dy * this._pinchStartViewport)),
+        );
     }
 
     _handleSingleTouchDrag() {
@@ -266,12 +259,13 @@ export class Controls {
         const dx = t.x - this._singleTouchStart.x;
         const dy = t.y - this._singleTouchStart.y;
 
-        s.centerX = this._singleTouchCenter.x - (dx / this.canvas.clientWidth) * vpX;
-        s.centerY = this._singleTouchCenter.y - (dy / this.canvas.clientHeight) * s.viewportSizeY;
-        s.dirty = true;
+        this._setCenter(
+            this._singleTouchCenterBF_X.sub(BigFloat.fromNumber((dx / this.canvas.clientWidth) * vpX)),
+            this._singleTouchCenterBF_Y.sub(BigFloat.fromNumber((dy / this.canvas.clientHeight) * s.viewportSizeY)),
+        );
     }
 
-    // --- Zoom at screen point ---
+    // --- Zoom at screen point (BigFloat-aware) ---
 
     _zoomAtPoint(clientX, clientY, factor) {
         const s = this.state;
@@ -281,30 +275,26 @@ export class Controls {
         const normX = clientX / this.canvas.clientWidth;
         const normY = clientY / this.canvas.clientHeight;
 
-        const mouseRe = s.centerX + (normX - 0.5) * vpX;
-        const mouseIm = s.centerY + (normY - 0.5) * s.viewportSizeY;
+        // Mouse position in complex plane = center + offset
+        const offsetRe = (normX - 0.5) * vpX;
+        const offsetIm = (normY - 0.5) * s.viewportSizeY;
+        const mouseBF_Re = s.centerBF_X.add(BigFloat.fromNumber(offsetRe));
+        const mouseBF_Im = s.centerBF_Y.add(BigFloat.fromNumber(offsetIm));
 
         s.viewportSizeY *= factor;
         const newVpX = s.viewportSizeY * aspect;
 
-        s.centerX = mouseRe - (normX - 0.5) * newVpX;
-        s.centerY = mouseIm - (normY - 0.5) * s.viewportSizeY;
-        s.dirty = true;
+        // New center = mouse - new offset
+        this._setCenter(
+            mouseBF_Re.sub(BigFloat.fromNumber((normX - 0.5) * newVpX)),
+            mouseBF_Im.sub(BigFloat.fromNumber((normY - 0.5) * s.viewportSizeY)),
+        );
     }
 
     // --- Utilities ---
+    _dist(a, b) { const dx = b.x - a.x, dy = b.y - a.y; return Math.sqrt(dx * dx + dy * dy); }
+    _mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
 
-    _dist(a, b) {
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    _mid(a, b) {
-        return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    }
-
-    // --- Callbacks (set from main.js) ---
     onToggleOverlay(fn) { this._onToggleOverlay = fn; }
     onScreenshot(fn) { this._onScreenshot = fn; }
 

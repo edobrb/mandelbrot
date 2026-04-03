@@ -10,7 +10,7 @@ import { Controls } from './controls.js';
 import { UI } from './ui.js';
 import { BigFloat } from './bigfloat.js';
 import { computeReferenceOrbit } from './perturbation.js';
-import { loadSavedSettings } from './storage.js';
+import { loadSavedSettings, decodeShareHash } from './storage.js';
 
 // ---------- Dynamic max iterations ----------
 
@@ -65,16 +65,31 @@ async function main() {
         if (saved.maxIterAdjustFactor) settings.maxIterAdjustFactor = saved.maxIterAdjustFactor;
     }
 
+    // A share-link hash overrides both defaults and localStorage
+    const shareData = window.location.hash ? decodeShareHash(window.location.hash) : null;
+    if (shareData) {
+        if (shareData.c)  settings.colors = shareData.c.map(([r, g, b]) => ({ r, g, b, a: 255 }));
+        if (shareData.w)  settings.weights = shareData.w;
+        if (shareData.cp) settings.colorPeriod = shareData.cp;
+        if (shareData.zs) settings.zoomSpeed = shareData.zs;
+        if (shareData.ps) settings.panSpeed = shareData.ps;
+        if (shareData.kz) settings.keyZoomSpeed = shareData.kz;
+        if (shareData.mf) settings.maxIterAdjustFactor = shareData.mf;
+        if (shareData.x)  settings.initialCenterX = shareData.x;
+        if (shareData.y)  settings.initialCenterY = shareData.y;
+        if (shareData.v)  settings.initialViewportSizeY = shareData.v;
+    }
+
     // Shared state — center is tracked in both BigFloat (precision) and f64 (display)
     const state = {
         centerX: settings.initialCenterX,
         centerY: settings.initialCenterY,
-        centerBF_X: BigFloat.fromNumber(settings.initialCenterX),
-        centerBF_Y: BigFloat.fromNumber(settings.initialCenterY),
+        centerBF_X: BigFloat.fromString(String(settings.initialCenterX)),
+        centerBF_Y: BigFloat.fromString(String(settings.initialCenterY)),
         viewportSizeY: settings.initialViewportSizeY,
-        baseMaxIter: saved?.baseMaxIter ?? settings.initialMaxIter,
-        maxIter: saved?.baseMaxIter ?? settings.initialMaxIter,
-        maxiterMode: saved?.maxiterMode ?? settings.maxiterMode,
+        baseMaxIter: shareData?.mi ?? saved?.baseMaxIter ?? settings.initialMaxIter,
+        maxIter: shareData?.mi ?? saved?.baseMaxIter ?? settings.initialMaxIter,
+        maxiterMode: shareData?.mm ?? saved?.maxiterMode ?? settings.maxiterMode,
         smartphoneMode: saved?.smartphoneMode ?? false,
         dirty: true,
         refOrbitDirty: true,

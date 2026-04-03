@@ -320,13 +320,17 @@ html, body {
 
 /* Action bar */
 .action-bar {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 6px;
     margin-top: 14px;
     padding-top: 10px;
     border-top: 1px solid rgba(255,255,255,0.06);
 }
-.action-btn { flex: 1; justify-content: center; text-align: center; }
+.action-btn { justify-content: center; text-align: center; }
+/* Screenshot spans both columns, share + save share a row, reset goes full width */
+.action-btn:nth-child(1) { grid-column: 1 / -1; }   /* Screenshot — full row */
+.action-btn:nth-child(4) { grid-column: 1 / -1; }   /* Reset — full row */
 
 /* Help */
 .dash-help {

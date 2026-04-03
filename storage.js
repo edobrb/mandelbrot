@@ -66,3 +66,50 @@ export function removeBookmark(idx) {
     list.splice(idx, 1);
     setBookmarks(list);
 }
+
+// ---------- Share link ----------
+
+/**
+ * Encode current position + settings into a base64url string for use as a URL hash.
+ * @param {object} settings
+ * @param {object} state  — must have centerBF_X/Y (BigFloat) or centerX/Y
+ */
+export function encodeShareHash(settings, state) {
+    const data = {
+        x: state.centerBF_X ? state.centerBF_X.toDecimalString(40) : String(state.centerX),
+        y: state.centerBF_Y ? state.centerBF_Y.toDecimalString(40) : String(state.centerY),
+        v: state.viewportSizeY,
+        mi: state.baseMaxIter,
+        mm: state.maxiterMode,
+        cp: settings.colorPeriod,
+        c: settings.colors.map(({ r, g, b }) => [r, g, b]),
+        w: settings.weights,
+        zs: settings.zoomSpeed,
+        ps: settings.panSpeed,
+        kz: settings.keyZoomSpeed,
+        mf: settings.maxIterAdjustFactor,
+    };
+    const json = JSON.stringify(data);
+    // btoa needs a binary string; use TextEncoder to support arbitrary characters
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    bytes.forEach(b => { binary += String.fromCharCode(b); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Decode a base64url share hash back into a plain object.
+ * Returns null if the hash is missing or malformed.
+ * @param {string} hash — raw hash string (with or without leading '#')
+ */
+export function decodeShareHash(hash) {
+    try {
+        const b64 = hash.replace(/^#/, '').replace(/-/g, '+').replace(/_/g, '/');
+        const binary = atob(b64);
+        const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+        const json = new TextDecoder().decode(bytes);
+        return JSON.parse(json);
+    } catch {
+        return null;
+    }
+}

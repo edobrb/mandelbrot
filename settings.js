@@ -1,7 +1,7 @@
 export const defaultSettings = {
-    initialCenterX: 0.261750402076009,
-    initialCenterY: 0.0020502675513626,
-    initialViewportSizeY: 1.15,
+    initialCenterX: -1.125,
+    initialCenterY: 0.0,
+    initialViewportSizeY: 3,
     initialMaxIter: 1000,
 
     maxiterMode: 'Dynamic',

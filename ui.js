@@ -6,7 +6,7 @@
  */
 
 import { drawGradientPreview, randomPalette } from './colors.js';
-import { saveSettings, getBookmarks, addBookmark, removeBookmark } from './storage.js';
+import { saveSettings, getBookmarks, addBookmark, removeBookmark, encodeShareHash } from './storage.js';
 
 export class UI {
     constructor(container, settings, state, callbacks = {}) {
@@ -451,6 +451,23 @@ export class UI {
             if (this.callbacks.takeScreenshot) this.callbacks.takeScreenshot();
         });
 
+        const shareBtn = document.createElement('button');
+        shareBtn.className = 'dash-btn action-btn';
+        shareBtn.textContent = '🔗 Share link';
+        shareBtn.addEventListener('click', () => {
+            const hash = encodeShareHash(this.settings, this.state);
+            const url = `${location.origin}${location.pathname}#${hash}`;
+            navigator.clipboard.writeText(url).then(() => {
+                shareBtn.textContent = 'Copied ✓';
+                setTimeout(() => { shareBtn.textContent = '🔗 Share link'; }, 2000);
+            }).catch(() => {
+                // Fallback: update the URL bar and let the user copy manually
+                location.hash = hash;
+                shareBtn.textContent = 'Link in URL bar ✓';
+                setTimeout(() => { shareBtn.textContent = '🔗 Share link'; }, 2500);
+            });
+        });
+
         const saveBtn = document.createElement('button');
         saveBtn.className = 'dash-btn action-btn';
         saveBtn.textContent = 'Save settings';
@@ -482,6 +499,7 @@ export class UI {
         });
 
         bar.appendChild(screenshotBtn);
+        bar.appendChild(shareBtn);
         bar.appendChild(saveBtn);
         bar.appendChild(resetBtn);
         return bar;

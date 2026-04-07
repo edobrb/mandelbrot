@@ -57,17 +57,15 @@ export class UI {
         this.container.appendChild(panel);
         this._panel = panel;
 
-        // Floating toggle button for smartphone mode
+        // Floating toggle button (always visible)
         const floatBtn = document.createElement('button');
-        floatBtn.className = 'float-toggle-btn hidden';
+        floatBtn.className = 'float-toggle-btn panel-open';
         floatBtn.textContent = '☰';
         floatBtn.title = 'Toggle settings';
         floatBtn.addEventListener('click', () => this.toggle());
         floatBtn.addEventListener('touchstart', (e) => e.stopPropagation());
         document.body.appendChild(floatBtn);
         this._floatBtn = floatBtn;
-
-        this._applySmartphoneMode();
     }
 
     _divider(title) {
@@ -314,33 +312,6 @@ export class UI {
             (v) => { this.settings.panSpeed = v; }
         );
 
-        // Smartphone mode toggle
-        const row = document.createElement('div');
-        row.className = 'dash-row';
-        const lbl = document.createElement('label');
-        lbl.className = 'dash-label';
-        lbl.textContent = 'Smartphone mode';
-        const seg = document.createElement('div');
-        seg.className = 'seg-control';
-        const mkBtn = (label, value) => {
-            const btn = document.createElement('button');
-            btn.className = 'seg-btn' + (this.state.smartphoneMode === value ? ' active' : '');
-            btn.textContent = label;
-            btn.addEventListener('click', () => {
-                this.state.smartphoneMode = value;
-                seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this._applySmartphoneMode();
-            });
-            this._fields['smartphone_' + label] = btn;
-            return btn;
-        };
-        seg.appendChild(mkBtn('Off', false));
-        seg.appendChild(mkBtn('On', true));
-        row.appendChild(lbl);
-        row.appendChild(seg);
-        wrap.appendChild(row);
-
         return wrap;
     }
 
@@ -559,19 +530,9 @@ export class UI {
         if (this._visible) { this._syncInputs(); this._refreshBookmarksList(); }
     }
 
-    _applySmartphoneMode() {
-        const on = this.state.smartphoneMode;
-        if (this._floatBtn) this._floatBtn.classList.toggle('hidden', !on);
-        this._updateHelp();
-    }
-
     _updateHelp() {
         if (!this._helpEl) return;
-        if (this.state.smartphoneMode) {
-            this._helpEl.innerHTML = 'Drag=Pan &nbsp;·&nbsp; Pinch=Zoom &nbsp;·&nbsp; ☰=Toggle panel';
-        } else {
-            this._helpEl.innerHTML = 'Drag=Pan &nbsp;·&nbsp; Scroll/W/S=Zoom &nbsp;·&nbsp; Arrows=Pan &nbsp;·&nbsp; I=Toggle panel &nbsp;·&nbsp; F11=Fullscreen';
-        }
+        this._helpEl.innerHTML = 'Drag=Pan &nbsp;·&nbsp; Scroll/W/S=Zoom &nbsp;·&nbsp; Pinch=Zoom &nbsp;·&nbsp; Arrows=Pan &nbsp;·&nbsp; ☰=Toggle panel &nbsp;·&nbsp; F11=Fullscreen';
     }
 
     _syncInputs() {
@@ -591,11 +552,6 @@ export class UI {
             if (btn) btn.classList.toggle('active', this.state.maxiterMode === v);
         });
 
-        // Smartphone mode buttons
-        [['Off', false], ['On', true]].forEach(([label, value]) => {
-            const btn = this._fields['smartphone_' + label];
-            if (btn) btn.classList.toggle('active', this.state.smartphoneMode === value);
-        });
     }
 
     update(state) {

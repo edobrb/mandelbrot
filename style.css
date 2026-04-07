@@ -183,63 +183,79 @@ html, body {
 .dash-number:focus { border-color: rgba(255,255,255,0.30); }
 
 /* Gradient preview */
+/* ── Interactive gradient bar ── */
+.grad-bar-wrap {
+    margin-bottom: 8px;
+    user-select: none;
+}
+
 .gradient-preview {
     display: block;
     width: 100%;
-    height: 16px;
-    border-radius: 4px;
+    height: 36px;
+    border-radius: 4px 4px 0 0;
     border: 1px solid rgba(255,255,255,0.08);
+    border-bottom: none;
+}
+
+/* Rail that holds the stop markers, flush below the gradient bar */
+.grad-stops-rail {
+    position: relative;
+    height: 24px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    overflow: visible;
     margin-bottom: 8px;
 }
 
-/* Color stops */
-.color-stops {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    flex: 1;
-}
-.color-swatch {
-    width: 26px;
-    height: 26px;
-    border: none;
-    border-radius: 5px;
-    padding: 0;
+/* Each handle: colored square with an upward triangle that touches the bar */
+.grad-handle {
+    position: absolute;
+    bottom: 4px;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    background: var(--stop-color);
+    border: 2px solid rgba(255,255,255,0.55);
+    border-radius: 3px;
     cursor: pointer;
-    background: none;
-    transition: transform 0.1s;
-}
-.color-swatch:hover { transform: scale(1.1); }
-.color-swatch::-webkit-color-swatch-wrapper { padding: 0; }
-.color-swatch::-webkit-color-swatch { border-radius: 5px; border: 1px solid rgba(255,255,255,0.15); }
-
-/* Sublabel */
-.dash-sublabel {
-    font-size: 10px;
-    color: rgba(255,255,255,0.25);
-    margin: 8px 0 5px;
+    z-index: 5;
+    transition: border-color 0.12s, box-shadow 0.12s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
-/* Segment weights */
-.weights-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 4px;
+/* Triangle pointing up — tip pokes into the gradient bar */
+.grad-handle::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 8px solid var(--stop-color);
+    filter: drop-shadow(0 -1px 0 rgba(255,255,255,0.15));
 }
-.weight-input {
-    width: 42px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 5px;
-    color: #ccc;
-    font-size: 11px;
-    padding: 3px 4px;
-    text-align: center;
-    outline: none;
-    transition: border-color 0.15s;
+
+.grad-handle:hover,
+.grad-handle:focus-visible {
+    border-color: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    z-index: 10;
 }
-.weight-input:focus { border-color: rgba(255,255,255,0.30); }
+
+.grad-handle--drag { cursor: ew-resize; }
+
+.grad-handle--dragging {
+    border-color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    z-index: 10;
+    transition: none;
+}
 
 /* Generic buttons */
 .dash-btn {

@@ -20,8 +20,7 @@ export class UI {
         this._fields = {};
         this._bookmarksList = null;
         this._gradientCanvas = null;
-        this._colorStopsWrap = null;
-        this._weightsWrap = null;
+        this._gradBarWrap = null;
         this._floatBtn = null;
         this._helpEl = null;
 
@@ -155,22 +154,29 @@ export class UI {
             (v) => { this.settings.colorPeriod = v; this.state.dirty = true; }
         );
 
-        // Gradient preview
+        // Interactive gradient bar — handles for color editing and weight dragging
+        const barWrap = document.createElement('div');
+        barWrap.className = 'grad-bar-wrap';
+
         const gradCanvas = document.createElement('canvas');
         gradCanvas.className = 'gradient-preview';
-        gradCanvas.width = 300;
-        gradCanvas.height = 16;
-        wrap.appendChild(gradCanvas);
+        gradCanvas.height = 36;
+        barWrap.appendChild(gradCanvas);
         this._gradientCanvas = gradCanvas;
-        drawGradientPreview(gradCanvas, this.settings.colors, this.settings.weights, this.settings.gradientFunction);
 
-        // Color stops + add/remove on same row
-        const stopsRow = document.createElement('div');
-        stopsRow.className = 'dash-row dash-row--wrap';
+        const stopsRail = document.createElement('div');
+        stopsRail.className = 'grad-stops-rail';
+        barWrap.appendChild(stopsRail);
+        this._gradStopsRail = stopsRail;
 
-        this._colorStopsWrap = document.createElement('div');
-        this._colorStopsWrap.className = 'color-stops';
-        this._rebuildColorStops();
+        this._gradBarWrap = barWrap;
+        wrap.appendChild(barWrap);
+
+        this._rebuildGradientHandles();
+
+        // Buttons row
+        const btnRow = document.createElement('div');
+        btnRow.className = 'dash-row';
 
         const addBtn = document.createElement('button');
         addBtn.className = 'dash-btn dash-btn--icon';
@@ -207,76 +213,167 @@ export class UI {
             this._onStopsChanged();
         });
 
-        stopsRow.appendChild(this._colorStopsWrap);
-        stopsRow.appendChild(addBtn);
-        stopsRow.appendChild(removeBtn);
-        wrap.appendChild(stopsRow);
-        wrap.appendChild(randomBtn);
-
-        // Segment weights
-        const wLbl = document.createElement('div');
-        wLbl.className = 'dash-sublabel';
-        wLbl.textContent = 'Segment weights';
-        wrap.appendChild(wLbl);
-
-        this._weightsWrap = document.createElement('div');
-        this._weightsWrap.className = 'weights-row';
-        wrap.appendChild(this._weightsWrap);
-        this._rebuildWeights();
+        btnRow.appendChild(addBtn);
+        btnRow.appendChild(removeBtn);
+        btnRow.appendChild(randomBtn);
+        wrap.appendChild(btnRow);
 
         return wrap;
     }
 
-    _rebuildColorStops() {
-        const wrap = this._colorStopsWrap;
-        wrap.innerHTML = '';
-        this.settings.colors.forEach((c, i) => {
+    // Numerically invert a monotone-increasing fn: find x s.t. fn(x) ≈ y.
+    _invertGradFn(y) {
+        const fn = this.settings.gradientFunction;
+        let lo = 0, hi = 1;
+        for (let k = 0; k < 32; k++) {
+            const mid = (lo + hi) / 2;
+            if (fn(mid) < y) lo = mid; else hi = mid;
+        }
+        return (lo + hi) / 2;
+    }
+
+    // Convert a cumulative-weight fraction (0..1) to visual bar position (0..1).
+    // This accounts for the non-linear gradientFunction so handles sit exactly
+    // on top of their color in the preview bar.
+    _weightToVisual(weightFraction) {
+        if (weightFraction <= 0) return 0;
+        if (weightFraction >= 1) return 1;
+        return this._invertGradFn(weightFraction);
+    }
+
+    // Convert a visual bar position (0..1) back to weight-space fraction (0..1).
+    _visualToWeight(visualFraction) {
+        return this.settings.gradientFunction(Math.max(0, Math.min(1, visualFraction)));
+    }
+
+    // Rebuild handles in the stops rail. Called after add/remove/randomize.
+    // Not called during live drag or while a color picker is open.
+    _rebuildGradientHandles() {
+        const rail    = this._gradStopsRail;
+        rail.querySelectorAll('.grad-handle').forEach(h => h.remove());
+
+        // Sync canvas pixel width so drawn gradient aligns with CSS-% handles.
+        const displayW = this._gradientCanvas.offsetWidth;
+        if (displayW > 0) this._gradientCanvas.width = displayW;
+
+        drawGradientPreview(this._gradientCanvas, this.settings.colors, this.settings.weights, this.settings.gradientFunction);
+
+        const colors      = this.settings.colors;
+        const weights     = this.settings.weights;
+        const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+        let cumWeight = 0;
+        colors.forEach((color, i) => {
+            const isDraggable = i > 0 && i < colors.length - 1;
+
+            // Visual position on the bar — accounts for the log gradient function.
+            const visualPct = this._weightToVisual(cumWeight / totalWeight) * 100;
+
             const hex = '#' +
-                c.r.toString(16).padStart(2, '0') +
-                c.g.toString(16).padStart(2, '0') +
-                c.b.toString(16).padStart(2, '0');
-            const picker = document.createElement('input');
-            picker.type = 'color';
-            picker.className = 'color-swatch';
-            picker.value = hex;
-            picker.title = `Stop ${i + 1}`;
-            picker.addEventListener('input', () => {
-                const h = picker.value;
+                color.r.toString(16).padStart(2, '0') +
+                color.g.toString(16).padStart(2, '0') +
+                color.b.toString(16).padStart(2, '0');
+
+            const handle = document.createElement('div');
+            handle.className = 'grad-handle' + (isDraggable ? ' grad-handle--drag' : '');
+            handle.style.left = visualPct + '%';
+            handle.style.setProperty('--stop-color', hex);
+            handle.title = isDraggable ? 'Drag to adjust · Click to change color' : 'Click to change color';
+
+            const inp = document.createElement('input');
+            inp.type  = 'color';
+            inp.value = hex;
+            inp.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+            handle.appendChild(inp);
+
+            inp.addEventListener('input', () => {
+                const h = inp.value;
                 this.settings.colors[i] = {
                     r: parseInt(h.slice(1, 3), 16),
                     g: parseInt(h.slice(3, 5), 16),
                     b: parseInt(h.slice(5, 7), 16),
                     a: 255,
                 };
+                handle.style.setProperty('--stop-color', h);
                 this._onGradientChange();
             });
-            wrap.appendChild(picker);
+
+            if (!isDraggable) {
+                handle.addEventListener('click', (e) => { e.stopPropagation(); inp.click(); });
+            } else {
+                let dragging = false, startClientX = 0;
+
+                const clientX = (e) => e.touches ? e.touches[0].clientX : e.clientX;
+
+                const onMove = (e) => {
+                    const railRect = rail.getBoundingClientRect();
+                    const p        = Math.max(0, Math.min(1, (clientX(e) - railRect.left) / railRect.width));
+
+                    if (!dragging) {
+                        if (Math.abs(clientX(e) - startClientX) < 3) return;
+                        dragging = true;
+                        handle.classList.add('grad-handle--dragging');
+                    }
+
+                    // Compute fixed neighbours' visual positions for clamping.
+                    let leftCum = 0;
+                    for (let j = 0; j < i - 1; j++) leftCum += weights[j];
+                    let rightCum = 0;
+                    for (let j = i + 1; j < weights.length; j++) rightCum += weights[j];
+
+                    // Clamp in VISUAL space (8 px margin) so the log-function
+                    // non-linearity doesn't create a sticking gap near the edges.
+                    const railW      = rail.getBoundingClientRect().width || 300;
+                    const marginFrac = 8 / railW;
+                    const leftBound  = this._weightToVisual(leftCum / totalWeight);
+                    const rightBound = this._weightToVisual((totalWeight - rightCum) / totalWeight);
+                    const clampedP   = Math.max(leftBound + marginFrac, Math.min(rightBound - marginFrac, p));
+
+                    // Convert clamped visual position → weight space.
+                    const available = totalWeight - leftCum - rightCum;
+                    const newLeft   = this._visualToWeight(clampedP) * totalWeight - leftCum;
+
+                    weights[i - 1] = newLeft;
+                    weights[i]     = available - newLeft;
+
+                    // Reposition handle at corrected visual position.
+                    const newVisual = this._weightToVisual((leftCum + newLeft) / totalWeight);
+                    handle.style.left = (newVisual * 100) + '%';
+                    this._onGradientChange();
+                };
+
+                const onEnd = () => {
+                    if (!dragging) inp.click();
+                    dragging = false;
+                    handle.classList.remove('grad-handle--dragging');
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onEnd);
+                    window.removeEventListener('touchmove', onMove);
+                    window.removeEventListener('touchend', onEnd);
+                };
+
+                const onStart = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dragging     = false;
+                    startClientX = clientX(e);
+                    window.addEventListener('mousemove', onMove);
+                    window.addEventListener('mouseup', onEnd);
+                    window.addEventListener('touchmove', onMove, { passive: false });
+                    window.addEventListener('touchend', onEnd);
+                };
+
+                handle.addEventListener('mousedown', onStart);
+                handle.addEventListener('touchstart', onStart, { passive: false });
+            }
+
+            rail.appendChild(handle);
+            if (i < weights.length) cumWeight += weights[i];
         });
     }
 
-    _rebuildWeights() {
-        const wrap = this._weightsWrap;
-        wrap.innerHTML = '';
-        this.settings.weights.forEach((w, i) => {
-            const inp = document.createElement('input');
-            inp.type = 'number';
-            inp.className = 'weight-input';
-            inp.min = 0.1; inp.max = 20; inp.step = 0.1;
-            inp.value = w;
-            inp.title = `Segment ${i + 1}`;
-            inp.addEventListener('change', () => {
-                const v = Math.max(0.1, parseFloat(inp.value) || 1);
-                inp.value = v;
-                this.settings.weights[i] = v;
-                this._onGradientChange();
-            });
-            wrap.appendChild(inp);
-        });
-    }
-
-    // Called when a color value or weight changes — only redraw the preview.
-    // Do NOT rebuild the stop pickers here: destroying the DOM node closes the
-    // native color picker dialog immediately.
+    // Called when a color value or weight changes — redraw the gradient preview.
+    // Does NOT rebuild handles so open color pickers stay open.
     _onGradientChange() {
         this.settings._colorVersion = (this.settings._colorVersion || 0) + 1;
         this.state.dirty = true;
@@ -284,11 +381,10 @@ export class UI {
     }
 
     // Called when the number of stops changes (add/remove/randomize).
-    // Safe to rebuild the full DOM here because no picker is open.
     _onStopsChanged() {
-        this._onGradientChange();
-        this._rebuildColorStops();
-        this._rebuildWeights();
+        this._rebuildGradientHandles();
+        this.settings._colorVersion = (this.settings._colorVersion || 0) + 1;
+        this.state.dirty = true;
     }
 
     // ─── Navigation ──────────────────────────────────

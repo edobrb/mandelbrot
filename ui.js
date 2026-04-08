@@ -19,8 +19,10 @@ export class UI {
         this._panel = null;
         this._fields = {};
         this._bookmarksList = null;
-        this._gradientCanvas = null;
-        this._gradBarWrap = null;
+        this._geCanvas = null;
+        this._geRail = null;
+        this._geEditor = null;
+        this._geActiveIdx = -1;
         this._floatBtn = null;
         this._helpEl = null;
 
@@ -154,237 +156,490 @@ export class UI {
             (v) => { this.settings.colorPeriod = v; this.state.dirty = true; }
         );
 
-        // Interactive gradient bar — handles for color editing and weight dragging
-        const barWrap = document.createElement('div');
-        barWrap.className = 'grad-bar-wrap';
+        // ── Gradient Editor ──
+        const ge = document.createElement('div');
+        ge.className = 'ge';
 
-        const gradCanvas = document.createElement('canvas');
-        gradCanvas.className = 'gradient-preview';
-        gradCanvas.height = 36;
-        barWrap.appendChild(gradCanvas);
-        this._gradientCanvas = gradCanvas;
-
-        const stopsRail = document.createElement('div');
-        stopsRail.className = 'grad-stops-rail';
-        barWrap.appendChild(stopsRail);
-        this._gradStopsRail = stopsRail;
-
-        this._gradBarWrap = barWrap;
-        wrap.appendChild(barWrap);
-
-        this._rebuildGradientHandles();
-
-        // Buttons row
-        const btnRow = document.createElement('div');
-        btnRow.className = 'dash-row';
-
-        const addBtn = document.createElement('button');
-        addBtn.className = 'dash-btn dash-btn--icon';
-        addBtn.title = 'Add color stop';
-        addBtn.textContent = '+';
-        addBtn.addEventListener('click', () => {
-            const last = this.settings.colors[this.settings.colors.length - 1];
-            this.settings.colors.push({ ...last });
-            this.settings.weights.push(1.0);
-            this._onStopsChanged();
-        });
-
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'dash-btn dash-btn--icon dash-btn--danger';
-        removeBtn.title = 'Remove last stop';
-        removeBtn.textContent = '−';
-        removeBtn.addEventListener('click', () => {
-            if (this.settings.colors.length <= 2) return;
-            this.settings.colors.pop();
-            this.settings.weights.pop();
-            this._onStopsChanged();
-        });
-
+        // Toolbar: hint text + randomize button
+        const toolbar = document.createElement('div');
+        toolbar.className = 'ge-toolbar';
+        const hint = document.createElement('span');
+        hint.className = 'ge-hint';
+        hint.textContent = 'Click gradient to add · click handle to edit';
         const randomBtn = document.createElement('button');
-        randomBtn.className = 'dash-btn';
-        randomBtn.textContent = '🎲 Randomize';
-        randomBtn.addEventListener('click', () => {
-            const palette = randomPalette();
-            this.settings.colors      = palette.colors;
-            this.settings.weights     = palette.weights;
-            this.settings.colorPeriod = palette.colorPeriod;
-            this._fields['colorPeriod_slider'] && (this._fields['colorPeriod_slider'].value = palette.colorPeriod);
-            this._fields['colorPeriod_num']    && (this._fields['colorPeriod_num'].value    = palette.colorPeriod);
-            this._onStopsChanged();
+        randomBtn.className = 'dash-btn ge-dice';
+        randomBtn.textContent = '🎲';
+        randomBtn.title = 'Random palette';
+        randomBtn.addEventListener('click', () => this._geRandomize());
+        toolbar.appendChild(hint);
+        toolbar.appendChild(randomBtn);
+        ge.appendChild(toolbar);
+
+        // Track: canvas + handle rail (unified visual block)
+        const track = document.createElement('div');
+        track.className = 'ge-track';
+
+        const canvas = document.createElement('canvas');
+        canvas.className = 'ge-canvas';
+        canvas.height = 28;
+        track.appendChild(canvas);
+        this._geCanvas = canvas;
+
+        const rail = document.createElement('div');
+        rail.className = 'ge-rail';
+        track.appendChild(rail);
+        this._geRail = rail;
+
+        // Click on track (not on a handle) → add a new color stop
+        let trackDownPos = null;
+        track.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.ge-handle')) return;
+            trackDownPos = { x: e.clientX, y: e.clientY };
+        });
+        track.addEventListener('pointerup', (e) => {
+            if (!trackDownPos) return;
+            const dx = Math.abs(e.clientX - trackDownPos.x);
+            const dy = Math.abs(e.clientY - trackDownPos.y);
+            trackDownPos = null;
+            if (dx > 4 || dy > 4) return;
+            if (e.target.closest('.ge-handle')) return;
+            const rect = canvas.getBoundingClientRect();
+            const p = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            this._geAddStop(p);
         });
 
-        btnRow.appendChild(addBtn);
-        btnRow.appendChild(removeBtn);
-        btnRow.appendChild(randomBtn);
-        wrap.appendChild(btnRow);
+        ge.appendChild(track);
+
+        // Inline color editor (hidden by default, appears below rail)
+        const editor = document.createElement('div');
+        editor.className = 'ge-editor';
+        ge.appendChild(editor);
+        this._geEditor = editor;
+        this._geActiveIdx = -1;
+
+        wrap.appendChild(ge);
+        this._geContainer = ge;
+
+        // Build initial handles
+        this._geRebuild();
 
         return wrap;
+    }
+
+    // ── Gradient editor: coordinate conversion ──
+
+    _toHex(c) {
+        return '#' +
+            c.r.toString(16).padStart(2, '0') +
+            c.g.toString(16).padStart(2, '0') +
+            c.b.toString(16).padStart(2, '0');
+    }
+
+    _fromHex(hex) {
+        const h = hex.replace('#', '');
+        return {
+            r: parseInt(h.slice(0, 2), 16) || 0,
+            g: parseInt(h.slice(2, 4), 16) || 0,
+            b: parseInt(h.slice(4, 6), 16) || 0,
+            a: 255,
+        };
     }
 
     // Numerically invert a monotone-increasing fn: find x s.t. fn(x) ≈ y.
     _invertGradFn(y) {
         const fn = this.settings.gradientFunction;
         let lo = 0, hi = 1;
-        for (let k = 0; k < 32; k++) {
+        for (let k = 0; k < 40; k++) {
             const mid = (lo + hi) / 2;
             if (fn(mid) < y) lo = mid; else hi = mid;
         }
         return (lo + hi) / 2;
     }
 
-    // Convert a cumulative-weight fraction (0..1) to visual bar position (0..1).
-    // This accounts for the non-linear gradientFunction so handles sit exactly
-    // on top of their color in the preview bar.
-    _weightToVisual(weightFraction) {
-        if (weightFraction <= 0) return 0;
-        if (weightFraction >= 1) return 1;
-        return this._invertGradFn(weightFraction);
+    _weightToVisual(wf) {
+        if (wf <= 0) return 0;
+        if (wf >= 1) return 1;
+        return this._invertGradFn(wf);
     }
 
-    // Convert a visual bar position (0..1) back to weight-space fraction (0..1).
-    _visualToWeight(visualFraction) {
-        return this.settings.gradientFunction(Math.max(0, Math.min(1, visualFraction)));
+    _visualToWeight(vf) {
+        return this.settings.gradientFunction(Math.max(0, Math.min(1, vf)));
     }
 
-    // Rebuild handles in the stops rail. Called after add/remove/randomize.
-    // Not called during live drag or while a color picker is open.
-    _rebuildGradientHandles() {
-        const rail    = this._gradStopsRail;
-        rail.querySelectorAll('.grad-handle').forEach(h => h.remove());
+    // Compute visual positions (0..1) for all color stops from weights.
+    _geGetPositions() {
+        const { weights } = this.settings;
+        const total = weights.reduce((a, b) => a + b, 0);
+        if (total === 0) return this.settings.colors.map((_, i, a) => i / Math.max(1, a.length - 1));
+        const positions = [0];
+        let cum = 0;
+        for (let i = 0; i < weights.length; i++) {
+            cum += weights[i];
+            positions.push(this._weightToVisual(cum / total));
+        }
+        return positions;
+    }
 
-        // Sync canvas pixel width so drawn gradient aligns with CSS-% handles.
-        const displayW = this._gradientCanvas.offsetWidth;
-        if (displayW > 0) this._gradientCanvas.width = displayW;
+    // Write visual positions back as weights (preserving total).
+    _geSetPositionsAsWeights(positions) {
+        const oldTotal = this.settings.weights.reduce((a, b) => a + b, 0) || 1;
+        const wFracs = positions.map(p => this._visualToWeight(p));
+        const newWeights = [];
+        for (let i = 0; i < wFracs.length - 1; i++) {
+            newWeights.push(Math.max(1e-6, (wFracs[i + 1] - wFracs[i]) * oldTotal));
+        }
+        this.settings.weights = newWeights;
+    }
 
-        drawGradientPreview(this._gradientCanvas, this.settings.colors, this.settings.weights, this.settings.gradientFunction);
+    // ── Gradient editor: rendering ──
 
-        const colors      = this.settings.colors;
-        const weights     = this.settings.weights;
-        const totalWeight = weights.reduce((a, b) => a + b, 0);
+    _geRebuild() {
+        this._geRail.classList.remove('ge-rail--dragging');
+        const displayW = this._geCanvas.offsetWidth;
+        if (displayW > 0) this._geCanvas.width = displayW;
+        this._geRedraw();
+        this._geRebuildHandles();
+        // Keep editor open if the selected stop still exists
+        if (this._geActiveIdx >= 0 && this._geActiveIdx < this.settings.colors.length) {
+            this._geShowEditor(this._geActiveIdx);
+        } else {
+            this._geCloseEditor();
+        }
+    }
 
-        let cumWeight = 0;
+    _geRedraw() {
+        drawGradientPreview(this._geCanvas, this.settings.colors, this.settings.weights, this.settings.gradientFunction);
+    }
+
+    _geRebuildHandles() {
+        const rail = this._geRail;
+        rail.innerHTML = '';
+
+        const positions = this._geGetPositions();
+        const colors = this.settings.colors;
+
         colors.forEach((color, i) => {
             const isDraggable = i > 0 && i < colors.length - 1;
-
-            // Visual position on the bar — accounts for the log gradient function.
-            const visualPct = this._weightToVisual(cumWeight / totalWeight) * 100;
-
-            const hex = '#' +
-                color.r.toString(16).padStart(2, '0') +
-                color.g.toString(16).padStart(2, '0') +
-                color.b.toString(16).padStart(2, '0');
+            const pos = positions[i];
 
             const handle = document.createElement('div');
-            handle.className = 'grad-handle' + (isDraggable ? ' grad-handle--drag' : '');
-            handle.style.left = visualPct + '%';
-            handle.style.setProperty('--stop-color', hex);
-            handle.title = isDraggable ? 'Drag to adjust · Click to change color' : 'Click to change color';
+            handle.className = 'ge-handle';
+            if (!isDraggable) handle.classList.add('ge-handle--endpoint');
+            if (i === this._geActiveIdx) handle.classList.add('ge-handle--active');
+            handle.style.left = (pos * 100) + '%';
+            handle.style.setProperty('--stop-color', this._toHex(color));
+            handle.setAttribute('role', 'slider');
+            handle.setAttribute('aria-label', `Color stop ${i + 1}`);
+            handle.setAttribute('tabindex', '0');
 
-            const inp = document.createElement('input');
-            inp.type  = 'color';
-            inp.value = hex;
-            inp.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
-            handle.appendChild(inp);
+            // ── Pointer-based drag + click (unified mouse & touch) ──
+            let dragState = null;
 
-            inp.addEventListener('input', () => {
-                const h = inp.value;
-                this.settings.colors[i] = {
-                    r: parseInt(h.slice(1, 3), 16),
-                    g: parseInt(h.slice(3, 5), 16),
-                    b: parseInt(h.slice(5, 7), 16),
-                    a: 255,
+            handle.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                handle.setPointerCapture(e.pointerId);
+                dragState = {
+                    pointerId: e.pointerId,
+                    startX: e.clientX,
+                    dragging: false,
+                    curIdx: i,
+                    draggedColor: { ...this.settings.colors[i] },
+                    positions: null, // snapshotted on first move
+                    handles: null,   // data-index -> DOM-handle mapping during drag
                 };
-                handle.style.setProperty('--stop-color', h);
-                this._onGradientChange();
             });
 
-            if (!isDraggable) {
-                handle.addEventListener('click', (e) => { e.stopPropagation(); inp.click(); });
-            } else {
-                let dragging = false, startClientX = 0;
+            handle.addEventListener('pointermove', (e) => {
+                if (!dragState || dragState.pointerId !== e.pointerId) return;
+                if (!isDraggable) return;
 
-                const clientX = (e) => e.touches ? e.touches[0].clientX : e.clientX;
+                const dx = Math.abs(e.clientX - dragState.startX);
+                if (!dragState.dragging && dx < 4) return;
 
-                const onMove = (e) => {
-                    const railRect = rail.getBoundingClientRect();
-                    const p        = Math.max(0, Math.min(1, (clientX(e) - railRect.left) / railRect.width));
+                if (!dragState.dragging) {
+                    dragState.dragging = true;
+                    dragState.positions = this._geGetPositions();
+                    dragState.handles = Array.from(rail.children);
+                    rail.classList.add('ge-rail--dragging');
+                    handle.classList.add('ge-handle--dragging');
+                    this._geCloseEditor();
+                }
 
-                    if (!dragging) {
-                        if (Math.abs(clientX(e) - startClientX) < 3) return;
-                        dragging = true;
-                        handle.classList.add('grad-handle--dragging');
+                const railRect = rail.getBoundingClientRect();
+                const rawP = Math.max(0, Math.min(1, (e.clientX - railRect.left) / railRect.width));
+                const margin = 6 / (railRect.width || 300);
+                const clampedP = Math.max(margin, Math.min(1 - margin, rawP));
+
+                const colors = this.settings.colors;
+                const pos = dragState.positions;
+                const handles = dragState.handles;
+                let ci = dragState.curIdx;
+
+                // Bubble left: crossed neighbor shifts right to its previous slot.
+                while (ci > 1 && clampedP < pos[ci - 1]) {
+                    pos[ci] = pos[ci - 1];
+                    [colors[ci], colors[ci - 1]] = [colors[ci - 1], colors[ci]];
+                    [handles[ci], handles[ci - 1]] = [handles[ci - 1], handles[ci]];
+                    ci--;
+                }
+
+                // Bubble right: crossed neighbor shifts left.
+                while (ci < colors.length - 2 && clampedP > pos[ci + 1]) {
+                    pos[ci] = pos[ci + 1];
+                    [colors[ci], colors[ci + 1]] = [colors[ci + 1], colors[ci]];
+                    [handles[ci], handles[ci + 1]] = [handles[ci + 1], handles[ci]];
+                    ci++;
+                }
+
+                // Dragged stop always stays exactly under pointer.
+                pos[ci] = clampedP;
+
+                dragState.curIdx = ci;
+
+                // Ensure dragged color stays consistent
+                colors[ci] = { ...dragState.draggedColor };
+
+                // Derive weights from the authoritative positions array
+                this._geSetPositionsAsWeights(pos);
+                this._geRedraw();
+                this._geNotify();
+
+                // Update ALL handle positions and colors
+                for (let j = 0; j < handles.length; j++) {
+                    handles[j].style.left = (pos[j] * 100) + '%';
+                    handles[j].style.setProperty('--stop-color', this._toHex(colors[j]));
+                }
+            });
+
+            handle.addEventListener('pointerup', (e) => {
+                if (!dragState || dragState.pointerId !== e.pointerId) return;
+                const wasDrag = dragState.dragging;
+                rail.classList.remove('ge-rail--dragging');
+                handle.classList.remove('ge-handle--dragging');
+                dragState = null;
+
+                if (!wasDrag) {
+                    // Click → toggle editor for this stop
+                    if (this._geActiveIdx === i) {
+                        this._geCloseEditor();
+                    } else {
+                        this._geShowEditor(i);
                     }
+                } else {
+                    // After drag, rebuild to ensure full consistency
+                    this._geRebuild();
+                }
+            });
 
-                    // Compute fixed neighbours' visual positions for clamping.
-                    let leftCum = 0;
-                    for (let j = 0; j < i - 1; j++) leftCum += weights[j];
-                    let rightCum = 0;
-                    for (let j = i + 1; j < weights.length; j++) rightCum += weights[j];
+            handle.addEventListener('lostpointercapture', () => {
+                if (dragState) {
+                    rail.classList.remove('ge-rail--dragging');
+                    handle.classList.remove('ge-handle--dragging');
+                    dragState = null;
+                    this._geRebuild();
+                }
+            });
 
-                    // Clamp in VISUAL space (8 px margin) so the log-function
-                    // non-linearity doesn't create a sticking gap near the edges.
-                    const railW      = rail.getBoundingClientRect().width || 300;
-                    const marginFrac = 8 / railW;
-                    const leftBound  = this._weightToVisual(leftCum / totalWeight);
-                    const rightBound = this._weightToVisual((totalWeight - rightCum) / totalWeight);
-                    const clampedP   = Math.max(leftBound + marginFrac, Math.min(rightBound - marginFrac, p));
-
-                    // Convert clamped visual position → weight space.
-                    const available = totalWeight - leftCum - rightCum;
-                    const newLeft   = this._visualToWeight(clampedP) * totalWeight - leftCum;
-
-                    weights[i - 1] = newLeft;
-                    weights[i]     = available - newLeft;
-
-                    // Reposition handle at corrected visual position.
-                    const newVisual = this._weightToVisual((leftCum + newLeft) / totalWeight);
-                    handle.style.left = (newVisual * 100) + '%';
-                    this._onGradientChange();
-                };
-
-                const onEnd = () => {
-                    if (!dragging) inp.click();
-                    dragging = false;
-                    handle.classList.remove('grad-handle--dragging');
-                    window.removeEventListener('mousemove', onMove);
-                    window.removeEventListener('mouseup', onEnd);
-                    window.removeEventListener('touchmove', onMove);
-                    window.removeEventListener('touchend', onEnd);
-                };
-
-                const onStart = (e) => {
+            // Keyboard support: nudge with arrow keys
+            handle.addEventListener('keydown', (e) => {
+                if (!isDraggable) return;
+                const step = e.shiftKey ? 0.05 : 0.01;
+                let delta = 0;
+                if (e.key === 'ArrowLeft') delta = -step;
+                else if (e.key === 'ArrowRight') delta = step;
+                else if (e.key === 'Delete' || e.key === 'Backspace') {
+                    if (colors.length > 2) { this._geRemoveStop(i); }
                     e.preventDefault();
-                    e.stopPropagation();
-                    dragging     = false;
-                    startClientX = clientX(e);
-                    window.addEventListener('mousemove', onMove);
-                    window.addEventListener('mouseup', onEnd);
-                    window.addEventListener('touchmove', onMove, { passive: false });
-                    window.addEventListener('touchend', onEnd);
-                };
+                    return;
+                }
+                if (delta === 0) return;
+                e.preventDefault();
 
-                handle.addEventListener('mousedown', onStart);
-                handle.addEventListener('touchstart', onStart, { passive: false });
-            }
+                const curPositions = this._geGetPositions();
+                const margin = 0.01;
+                const leftBound = curPositions[i - 1] + margin;
+                const rightBound = curPositions[i + 1] - margin;
+                curPositions[i] = Math.max(leftBound, Math.min(rightBound, curPositions[i] + delta));
+                this._geSetPositionsAsWeights(curPositions);
+                this._geRebuild();
+                this._geNotify();
+            });
 
             rail.appendChild(handle);
-            if (i < weights.length) cumWeight += weights[i];
         });
     }
 
-    // Called when a color value or weight changes — redraw the gradient preview.
-    // Does NOT rebuild handles so open color pickers stay open.
-    _onGradientChange() {
-        this.settings._colorVersion = (this.settings._colorVersion || 0) + 1;
-        this.state.dirty = true;
-        drawGradientPreview(this._gradientCanvas, this.settings.colors, this.settings.weights, this.settings.gradientFunction);
+    // ── Gradient editor: inline color editor ──
+
+    _geShowEditor(idx) {
+        this._geActiveIdx = idx;
+        const editor = this._geEditor;
+        editor.innerHTML = '';
+        editor.classList.add('ge-editor--open');
+
+        const colors = this.settings.colors;
+        const color = colors[idx];
+
+        // Highlight active handle
+        this._geRail.querySelectorAll('.ge-handle').forEach((h, j) => {
+            h.classList.toggle('ge-handle--active', j === idx);
+        });
+
+        // Header row
+        const header = document.createElement('div');
+        header.className = 'ge-editor__header';
+        const title = document.createElement('span');
+        title.textContent = idx === 0 ? 'First stop' : idx === colors.length - 1 ? 'Last stop' : `Stop ${idx + 1} of ${colors.length}`;
+        header.appendChild(title);
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'ge-editor__close';
+        closeBtn.textContent = '×';
+        closeBtn.title = 'Close editor';
+        closeBtn.addEventListener('click', () => this._geCloseEditor());
+        header.appendChild(closeBtn);
+        editor.appendChild(header);
+
+        // Color picker + hex input row
+        const colorRow = document.createElement('div');
+        colorRow.className = 'ge-editor__color-row';
+
+        const colorInp = document.createElement('input');
+        colorInp.type = 'color';
+        colorInp.className = 'ge-editor__picker';
+        colorInp.value = this._toHex(color);
+
+        const hexInp = document.createElement('input');
+        hexInp.type = 'text';
+        hexInp.className = 'ge-editor__hex';
+        hexInp.value = this._toHex(color).toUpperCase();
+        hexInp.maxLength = 7;
+        hexInp.spellcheck = false;
+        hexInp.placeholder = '#RRGGBB';
+
+        const applyColor = (hex) => {
+            const c = this._fromHex(hex);
+            this.settings.colors[idx] = c;
+            const handle = this._geRail.children[idx];
+            if (handle) handle.style.setProperty('--stop-color', this._toHex(c));
+            this._geRedraw();
+            this._geNotify();
+        };
+
+        colorInp.addEventListener('input', () => {
+            hexInp.value = colorInp.value.toUpperCase();
+            applyColor(colorInp.value);
+        });
+
+        hexInp.addEventListener('input', () => {
+            const v = hexInp.value.trim();
+            if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                colorInp.value = v;
+                applyColor(v);
+            }
+        });
+
+        hexInp.addEventListener('blur', () => {
+            hexInp.value = this._toHex(this.settings.colors[idx]).toUpperCase();
+        });
+
+        colorRow.appendChild(colorInp);
+        colorRow.appendChild(hexInp);
+
+        // Delete button (if > 2 stops)
+        if (colors.length > 2) {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'dash-btn dash-btn--danger ge-editor__delete';
+            delBtn.textContent = '✕ Remove';
+            delBtn.addEventListener('click', () => this._geRemoveStop(idx));
+            colorRow.appendChild(delBtn);
+        }
+
+        editor.appendChild(colorRow);
     }
 
-    // Called when the number of stops changes (add/remove/randomize).
-    _onStopsChanged() {
-        this._rebuildGradientHandles();
+    _geCloseEditor() {
+        this._geActiveIdx = -1;
+        this._geEditor.classList.remove('ge-editor--open');
+        this._geEditor.innerHTML = '';
+        if (this._geRail) {
+            this._geRail.querySelectorAll('.ge-handle').forEach(h => h.classList.remove('ge-handle--active'));
+        }
+    }
+
+    // ── Gradient editor: actions ──
+
+    _geAddStop(visualPos) {
+        const colors = this.settings.colors;
+        const weights = this.settings.weights;
+        const total = weights.reduce((a, b) => a + b, 0);
+
+        const wPos = this._visualToWeight(visualPos) * total;
+
+        let cumW = 0, k = 0;
+        for (; k < weights.length - 1; k++) {
+            if (cumW + weights[k] > wPos) break;
+            cumW += weights[k];
+        }
+
+        const t = weights[k] > 0 ? (wPos - cumW) / weights[k] : 0.5;
+        const c0 = colors[k], c1 = colors[k + 1];
+        const newColor = {
+            r: Math.round(c0.r + (c1.r - c0.r) * t),
+            g: Math.round(c0.g + (c1.g - c0.g) * t),
+            b: Math.round(c0.b + (c1.b - c0.b) * t),
+            a: 255,
+        };
+
+        const leftW = wPos - cumW;
+        const rightW = weights[k] - leftW;
+        colors.splice(k + 1, 0, newColor);
+        weights.splice(k, 1, leftW, rightW);
+
+        this._geRebuild();
+        this._geNotify();
+        this._geShowEditor(k + 1);
+    }
+
+    _geRemoveStop(idx) {
+        const weights = this.settings.weights;
+        if (idx === 0) {
+            weights.splice(0, 1);
+        } else if (idx >= weights.length) {
+            weights.splice(idx - 1, 1);
+        } else {
+            weights[idx - 1] += weights[idx];
+            weights.splice(idx, 1);
+        }
+        this.settings.colors.splice(idx, 1);
+        this._geCloseEditor();
+        this._geRebuild();
+        this._geNotify();
+    }
+
+    _geRandomize() {
+        const palette = randomPalette();
+        this.settings.colors = palette.colors;
+        this.settings.weights = palette.weights;
+        this.settings.colorPeriod = palette.colorPeriod;
+        if (this._fields['colorPeriod_slider']) this._fields['colorPeriod_slider'].value = palette.colorPeriod;
+        if (this._fields['colorPeriod_num']) this._fields['colorPeriod_num'].value = palette.colorPeriod;
+        this._geCloseEditor();
+        this._geRebuild();
+        this._geNotify();
+    }
+
+    _geNotify() {
         this.settings._colorVersion = (this.settings._colorVersion || 0) + 1;
         this.state.dirty = true;
+    }
+
+    // Called by reset handler in action bar.
+    _onStopsChanged() {
+        this._geCloseEditor();
+        this._geRebuild();
+        this._geNotify();
     }
 
     // ─── Navigation ──────────────────────────────────

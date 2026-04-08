@@ -182,79 +182,213 @@ html, body {
 }
 .dash-number:focus { border-color: rgba(255,255,255,0.30); }
 
-/* Gradient preview */
-/* ── Interactive gradient bar ── */
-.grad-bar-wrap {
-    margin-bottom: 8px;
-    user-select: none;
+/* ── Gradient Editor ── */
+
+.ge {
+    margin-bottom: 4px;
 }
 
-.gradient-preview {
+.ge-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.ge-hint {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.22);
+    font-style: italic;
+}
+
+.ge-dice {
+    padding: 2px 7px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Track: unified border wrapping canvas + rail */
+.ge-track {
+    cursor: crosshair;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: visible;
+}
+
+.ge-canvas {
     display: block;
     width: 100%;
-    height: 36px;
-    border-radius: 4px 4px 0 0;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-bottom: none;
+    height: 28px;
+    border-radius: 5px 5px 0 0;
+    pointer-events: none;
 }
 
-/* Rail that holds the stop markers, flush below the gradient bar */
-.grad-stops-rail {
+.ge-rail {
     position: relative;
     height: 24px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-top: none;
-    border-radius: 0 0 4px 4px;
+    background: rgba(255, 255, 255, 0.025);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 0 0 5px 5px;
     overflow: visible;
-    margin-bottom: 8px;
 }
 
-/* Each handle: colored square with an upward triangle that touches the bar */
-.grad-handle {
+/* Handle: colored circle with a tick connecting to the bar */
+.ge-handle {
     position: absolute;
-    bottom: 4px;
+    bottom: 3px;
     transform: translateX(-50%);
     width: 14px;
     height: 14px;
     background: var(--stop-color);
-    border: 2px solid rgba(255,255,255,0.55);
-    border-radius: 3px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
     cursor: pointer;
     z-index: 5;
-    transition: border-color 0.12s, box-shadow 0.12s;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    transition: transform 0.12s ease, border-color 0.12s, box-shadow 0.12s;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    touch-action: none;
+    outline: none;
 }
 
-/* Triangle pointing up — tip pokes into the gradient bar */
-.grad-handle::before {
+/* Vertical tick from handle up to the gradient bar */
+.ge-handle::before {
     content: '';
     position: absolute;
     bottom: 100%;
     left: 50%;
     transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 8px solid var(--stop-color);
-    filter: drop-shadow(0 -1px 0 rgba(255,255,255,0.15));
+    width: 2px;
+    height: 5px;
+    background: var(--stop-color);
+    border-radius: 1px;
+    opacity: 0.65;
+    transition: opacity 0.12s;
 }
 
-.grad-handle:hover,
-.grad-handle:focus-visible {
+.ge-handle:hover {
+    transform: translateX(-50%) scale(1.2);
     border-color: #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+.ge-handle:hover::before { opacity: 1; }
+
+/* While dragging, keep visual focus on the dragged handle only. */
+.ge-rail--dragging .ge-handle:not(.ge-handle--dragging) {
+    pointer-events: none;
+}
+.ge-rail--dragging .ge-handle:not(.ge-handle--dragging):hover {
+    transform: translateX(-50%);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    z-index: 5;
+}
+
+.ge-handle--active {
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0, 0, 0, 0.5);
     z-index: 10;
 }
 
-.grad-handle--drag { cursor: ew-resize; }
-
-.grad-handle--dragging {
+.ge-handle--dragging {
+    transform: translateX(-50%) scale(1.25);
     border-color: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.7);
-    z-index: 10;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.12), 0 3px 12px rgba(0, 0, 0, 0.6);
+    z-index: 20;
     transition: none;
+    cursor: ew-resize;
+}
+
+.ge-handle--endpoint {
+    border-radius: 3px;
+    width: 12px;
+    height: 12px;
+    bottom: 4px;
+}
+
+.ge-handle:focus-visible {
+    box-shadow: 0 0 0 3px rgba(100, 150, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Inline color editor (below rail) ── */
+
+.ge-editor {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.2s ease, opacity 0.15s ease, margin 0.2s ease;
+    margin-top: 0;
+}
+
+.ge-editor--open {
+    max-height: 120px;
+    opacity: 1;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.ge-editor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 6px;
+}
+
+.ge-editor__close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    transition: color 0.1s;
+}
+.ge-editor__close:hover { color: rgba(255, 255, 255, 0.7); }
+
+.ge-editor__color-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ge-editor__picker {
+    width: 36px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 2px;
+    background: transparent;
+    flex-shrink: 0;
+}
+
+.ge-editor__hex {
+    width: 80px;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 4px;
+    color: #ccc;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    padding: 5px 8px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.ge-editor__hex:focus { border-color: rgba(255, 255, 255, 0.3); }
+
+.ge-editor__delete {
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 /* Generic buttons */

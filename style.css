@@ -69,8 +69,21 @@ html, body {
 }
 .dashboard.hidden { display: none; }
 
-/* Section dividers */
-.dash-divider {
+/* Dashboard title */
+.dash-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 12px;
+    padding: 0;
+    letter-spacing: 0.02em;
+}
+
+/* Collapsible sections */
+.dash-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.08em;
@@ -79,7 +92,12 @@ html, body {
     margin: 14px 0 8px;
     padding-bottom: 6px;
     border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer;
+    user-select: none;
 }
+.dash-section-header:hover { color: rgba(255, 255, 255, 0.5); }
+.dash-chevron { font-size: 8px; }
+.dash-section-body.collapsed { display: none; }
 
 /* Live stats */
 .dash-stats {
@@ -486,17 +504,13 @@ input.stat-input:focus {
 
 /* Action bar */
 .action-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
     gap: 6px;
     margin-top: 14px;
     padding-top: 10px;
     border-top: 1px solid rgba(255,255,255,0.06);
 }
-.action-btn { justify-content: center; text-align: center; }
-/* Screenshot spans both columns, share + save share a row, reset goes full width */
-.action-btn:nth-child(1) { grid-column: 1 / -1; }   /* Screenshot — full row */
-.action-btn:nth-child(4) { grid-column: 1 / -1; }   /* Reset — full row */
+.action-btn { flex: 1; justify-content: center; text-align: center; }
 
 /* Help */
 .dash-help {

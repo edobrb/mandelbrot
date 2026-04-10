@@ -6,7 +6,7 @@
  */
 
 import { drawGradientPreview, randomPalette } from './colors.js';
-import { saveSettings, getBookmarks, addBookmark, removeBookmark, encodeShareHash } from './storage.js';
+import { getBookmarks, addBookmark, removeBookmark, encodeShareHash } from './storage.js';
 
 export class UI {
     constructor(container, settings, state, callbacks = {}) {
@@ -35,15 +35,17 @@ export class UI {
         const panel = document.createElement('div');
         panel.className = 'dashboard';
 
-        panel.appendChild(this._buildLive());
-        panel.appendChild(this._divider('Rendering'));
-        panel.appendChild(this._buildRendering());
-        panel.appendChild(this._divider('Colors'));
-        panel.appendChild(this._buildColors());
-        panel.appendChild(this._divider('Navigation'));
-        panel.appendChild(this._buildNavigation());
-        panel.appendChild(this._divider('Bookmarks'));
-        panel.appendChild(this._buildBookmarks());
+        const title = document.createElement('h1');
+        title.className = 'dash-title';
+        title.textContent = 'Mandelbrot set explorer';
+        panel.appendChild(title);
+
+        panel.appendChild(this._section('Coordinates', this._buildLive(), true));
+        panel.appendChild(this._section('Iterations', this._buildRendering()));
+        panel.appendChild(this._section('Colors', this._buildColors()));
+        panel.appendChild(this._section('Bookmarks', this._buildBookmarks()));
+
+        panel.appendChild(this._section('Controls', this._buildNavigation()));
         panel.appendChild(this._buildActionBar());
 
         const help = document.createElement('div');
@@ -69,11 +71,36 @@ export class UI {
         this._floatBtn = floatBtn;
     }
 
-    _divider(title) {
-        const el = document.createElement('div');
-        el.className = 'dash-divider';
-        el.textContent = title;
-        return el;
+    _section(title, contentEl, open = false) {
+        const wrap = document.createElement('div');
+        wrap.className = 'dash-section';
+
+        const header = document.createElement('div');
+        header.className = 'dash-section-header';
+
+        const chevron = document.createElement('span');
+        chevron.className = 'dash-chevron';
+        chevron.textContent = open ? '▼' : '▶';
+
+        const lbl = document.createElement('span');
+        lbl.textContent = title;
+
+        header.appendChild(lbl);
+        header.appendChild(chevron);
+
+        const body = document.createElement('div');
+        body.className = 'dash-section-body' + (open ? '' : ' collapsed');
+        body.appendChild(contentEl);
+
+        header.addEventListener('click', () => {
+            const isOpen = !body.classList.contains('collapsed');
+            body.classList.toggle('collapsed', isOpen);
+            chevron.textContent = isOpen ? '▶' : '▼';
+        });
+
+        wrap.appendChild(header);
+        wrap.appendChild(body);
+        return wrap;
     }
 
     // ─── Live stats ──────────────────────────────────
@@ -704,6 +731,7 @@ export class UI {
         settingsCheck.type = 'checkbox';
         settingsCheck.id = 'bm-save-settings';
         settingsCheck.className = 'dash-checkbox';
+        settingsCheck.checked = true;
         const settingsLbl = document.createElement('label');
         settingsLbl.htmlFor = 'bm-save-settings';
         settingsLbl.className = 'dash-label dash-label--minor';
@@ -836,18 +864,9 @@ export class UI {
             });
         });
 
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'dash-btn action-btn';
-        saveBtn.textContent = 'Save settings';
-        saveBtn.addEventListener('click', () => {
-            saveSettings(this.settings, this.state);
-            saveBtn.textContent = 'Saved ✓';
-            setTimeout(() => { saveBtn.textContent = 'Save settings'; }, 1500);
-        });
-
         const resetBtn = document.createElement('button');
         resetBtn.className = 'dash-btn action-btn dash-btn--danger';
-        resetBtn.textContent = 'Reset defaults';
+        resetBtn.textContent = 'Reset';
         resetBtn.addEventListener('click', () => {
             const def = this.callbacks.defaultSettings;
             if (!def) return;
@@ -862,13 +881,20 @@ export class UI {
             this.state.baseMaxIter            = def.initialMaxIter;
             this.state.maxiterMode            = def.maxiterMode;
             this.state.dirty                  = true;
+            if (this.callbacks.navigateTo) {
+                this.callbacks.navigateTo(
+                    String(def.initialCenterX),
+                    String(def.initialCenterY),
+                    def.initialViewportSizeY,
+                    null
+                );
+            }
             this._syncInputs();
             this._onStopsChanged();
         });
 
         bar.appendChild(screenshotBtn);
         bar.appendChild(shareBtn);
-        bar.appendChild(saveBtn);
         bar.appendChild(resetBtn);
         return bar;
     }

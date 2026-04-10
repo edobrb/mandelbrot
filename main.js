@@ -92,7 +92,7 @@ async function main() {
         maxiterMode: shareData?.mm ?? saved?.maxiterMode ?? settings.maxiterMode,
 dirty: true,
         refOrbitDirty: true,
-        fps: 0,
+        frameMs: 0,
         width: 0,
         height: 0,
     };
@@ -177,8 +177,7 @@ dirty: true,
 
     // ---------- Render loop ----------
 
-    let fpsFrames = 0;
-    let fpsTime = performance.now();
+    let renderStart = 0;
     let gpuBusy = false;
 
     function loop() {
@@ -222,18 +221,13 @@ dirty: true,
             const vpX = state.viewportSizeY * aspect;
 
             gpuBusy = true;
+            renderStart = performance.now();
             renderer.render(vpX, state.viewportSizeY, refOrbit.length, state.maxIter, settings.colorPeriod);
-            renderer.device.queue.onSubmittedWorkDone().then(() => { gpuBusy = false; });
+            renderer.device.queue.onSubmittedWorkDone().then(() => {
+                state.frameMs = performance.now() - renderStart;
+                gpuBusy = false;
+            });
             state.dirty = false;
-        }
-
-        // FPS
-        fpsFrames++;
-        const now = performance.now();
-        if (now - fpsTime >= 1000) {
-            state.fps = fpsFrames;
-            fpsFrames = 0;
-            fpsTime = now;
         }
 
         ui.update(state);

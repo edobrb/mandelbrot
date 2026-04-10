@@ -87,7 +87,7 @@ export class UI {
             ['centerY', 'Center Y'],
             ['zoom',    'Zoom'],
             ['iters',   'Iterations'],
-            ['fps',     'FPS'],
+            ['frameMs', 'Frame ms'],
             ['res',     'Resolution'],
         ]) {
             const lbl = document.createElement('span');
@@ -962,7 +962,7 @@ export class UI {
         if (document.activeElement !== this._fields.zoom)
             this._fields.zoom.value = state.viewportSizeY.toExponential(4);
         this._fields.iters.textContent = String(state.maxIter);
-        this._fields.fps.textContent = String(state.fps);
+        this._fields.frameMs.textContent = `${state.frameMs.toFixed(1)} ms`;
         this._fields.res.textContent = `${state.width} × ${state.height}`;
     }
 

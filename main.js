@@ -110,7 +110,7 @@ dirty: true,
 
     const controls = new Controls(canvas, state, settings);
 
-    function navigateTo(x, y, viewport) {
+    function navigateTo(x, y, viewport, bookmarkSettings) {
         state.centerBF_X = BigFloat.fromString(x);
         state.centerBF_Y = BigFloat.fromString(y);
         state.centerX = state.centerBF_X.toNumber();
@@ -118,6 +118,14 @@ dirty: true,
         state.viewportSizeY = viewport;
         state.refOrbitDirty = true;
         state.dirty = true;
+        if (bookmarkSettings) {
+            if (bookmarkSettings.colors)      settings.colors = bookmarkSettings.colors;
+            if (bookmarkSettings.weights)     settings.weights = bookmarkSettings.weights;
+            if (bookmarkSettings.colorPeriod) settings.colorPeriod = bookmarkSettings.colorPeriod;
+            if (bookmarkSettings.maxiterMode) state.maxiterMode = bookmarkSettings.maxiterMode;
+            if (bookmarkSettings.baseMaxIter) state.baseMaxIter = bookmarkSettings.baseMaxIter;
+            settings._colorVersion = (settings._colorVersion || 0) + 1;
+        }
     }
 
     const ui = new UI(

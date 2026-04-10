@@ -37,7 +37,11 @@ export function loadSavedSettings() {
 
 // ---------- Bookmarks ----------
 
-/** @typedef {{ name: string, x: string, y: string, viewport: number }} Bookmark */
+/**
+ * @typedef {{ r: number, g: number, b: number, a: number }} ColorStop
+ * @typedef {{ colors: ColorStop[], weights: number[], colorPeriod: number, maxiterMode: string, baseMaxIter: number }} BookmarkSettings
+ * @typedef {{ name: string, x: string, y: string, viewport: number, settings?: BookmarkSettings }} Bookmark
+ */
 
 export function getBookmarks() {
     try {

@@ -93,11 +93,25 @@ export class UI {
             const lbl = document.createElement('span');
             lbl.className = 'stat-label';
             lbl.textContent = label;
-            const val = document.createElement('span');
-            val.className = 'stat-value';
             grid.appendChild(lbl);
-            grid.appendChild(val);
-            this._fields[key] = val;
+
+            if (key === 'centerX' || key === 'centerY' || key === 'zoom') {
+                const inp = document.createElement('input');
+                inp.type = 'text';
+                inp.className = 'stat-value stat-input';
+                inp.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') inp.blur();
+                    e.stopPropagation();
+                });
+                inp.addEventListener('blur', () => this._applyStatInput(key, inp.value));
+                grid.appendChild(inp);
+                this._fields[key] = inp;
+            } else {
+                const val = document.createElement('span');
+                val.className = 'stat-value';
+                grid.appendChild(val);
+                this._fields[key] = val;
+            }
         }
 
         return grid;
@@ -683,9 +697,23 @@ export class UI {
         const saveBtn = document.createElement('button');
         saveBtn.className = 'dash-btn';
         saveBtn.textContent = 'Save current';
+
+        const settingsRow = document.createElement('div');
+        settingsRow.className = 'dash-row dash-row--checkbox';
+        const settingsCheck = document.createElement('input');
+        settingsCheck.type = 'checkbox';
+        settingsCheck.id = 'bm-save-settings';
+        settingsCheck.className = 'dash-checkbox';
+        const settingsLbl = document.createElement('label');
+        settingsLbl.htmlFor = 'bm-save-settings';
+        settingsLbl.className = 'dash-label dash-label--minor';
+        settingsLbl.textContent = 'Also save color & iter settings';
+        settingsRow.appendChild(settingsCheck);
+        settingsRow.appendChild(settingsLbl);
+
         saveBtn.addEventListener('click', () => {
             const name = nameInput.value.trim() || `Point ${getBookmarks().length + 1}`;
-            addBookmark({
+            const bm = {
                 name,
                 x: this.state.centerBF_X
                     ? this.state.centerBF_X.toDecimalString(40)
@@ -694,7 +722,17 @@ export class UI {
                     ? this.state.centerBF_Y.toDecimalString(40)
                     : String(this.state.centerY),
                 viewport: this.state.viewportSizeY,
-            });
+            };
+            if (settingsCheck.checked) {
+                bm.settings = {
+                    colors: this.settings.colors.map(c => ({ ...c })),
+                    weights: [...this.settings.weights],
+                    colorPeriod: this.settings.colorPeriod,
+                    maxiterMode: this.state.maxiterMode,
+                    baseMaxIter: this.state.baseMaxIter,
+                };
+            }
+            addBookmark(bm);
             nameInput.value = '';
             this._refreshBookmarksList();
         });
@@ -702,6 +740,7 @@ export class UI {
         saveRow.appendChild(nameInput);
         saveRow.appendChild(saveBtn);
         wrap.appendChild(saveRow);
+        wrap.appendChild(settingsRow);
 
         this._bookmarksList = document.createElement('div');
         this._bookmarksList.className = 'bookmarks-list';
@@ -733,7 +772,13 @@ export class UI {
             goBtn.textContent = '▶';
             goBtn.title = 'Navigate here';
             goBtn.addEventListener('click', () => {
-                if (this.callbacks.navigateTo) this.callbacks.navigateTo(bm.x, bm.y, bm.viewport);
+                if (this.callbacks.navigateTo) {
+                    this.callbacks.navigateTo(bm.x, bm.y, bm.viewport, bm.settings);
+                    if (bm.settings) {
+                        this._syncInputs();
+                        this._geRebuild();
+                    }
+                }
             });
 
             const info = document.createElement('div');
@@ -743,7 +788,8 @@ export class UI {
             nameLine.textContent = bm.name;
             const zoomLine = document.createElement('div');
             zoomLine.className = 'bookmark-zoom';
-            zoomLine.textContent = `zoom 10^${(-Math.log10(bm.viewport)).toFixed(1)}`;
+            const settingsTag = bm.settings ? ' · ⚙' : '';
+            zoomLine.textContent = `zoom 10^${(-Math.log10(bm.viewport)).toFixed(1)}${settingsTag}`;
             info.appendChild(nameLine);
             info.appendChild(zoomLine);
 
@@ -907,14 +953,35 @@ export class UI {
 
     update(state) {
         if (!this._visible) return;
-        this._fields.centerX.textContent = state.centerBF_X
-            ? state.centerBF_X.toDecimalString(40) : state.centerX.toFixed(17);
-        this._fields.centerY.textContent = state.centerBF_Y
-            ? state.centerBF_Y.toDecimalString(40) : state.centerY.toFixed(17);
-        this._fields.zoom.textContent = `10^${(-Math.log10(state.viewportSizeY)).toFixed(1)}`;
+        if (document.activeElement !== this._fields.centerX)
+            this._fields.centerX.value = state.centerBF_X
+                ? state.centerBF_X.toDecimalString(40) : state.centerX.toFixed(17);
+        if (document.activeElement !== this._fields.centerY)
+            this._fields.centerY.value = state.centerBF_Y
+                ? state.centerBF_Y.toDecimalString(40) : state.centerY.toFixed(17);
+        if (document.activeElement !== this._fields.zoom)
+            this._fields.zoom.value = state.viewportSizeY.toExponential(4);
         this._fields.iters.textContent = String(state.maxIter);
         this._fields.fps.textContent = String(state.fps);
         this._fields.res.textContent = `${state.width} × ${state.height}`;
+    }
+
+    _applyStatInput(key, raw) {
+        const nav = this.callbacks.navigateTo;
+        if (!nav) return;
+        const state = this.state;
+        const x = state.centerBF_X ? state.centerBF_X.toDecimalString(40) : String(state.centerX);
+        const y = state.centerBF_Y ? state.centerBF_Y.toDecimalString(40) : String(state.centerY);
+        if (key === 'centerX') {
+            const v = parseFloat(raw);
+            if (!isNaN(v)) nav(raw.trim(), y, state.viewportSizeY);
+        } else if (key === 'centerY') {
+            const v = parseFloat(raw);
+            if (!isNaN(v)) nav(x, raw.trim(), state.viewportSizeY);
+        } else if (key === 'zoom') {
+            const v = parseFloat(raw);
+            if (!isNaN(v) && v > 0) nav(x, y, v);
+        }
     }
 
     destroy() {
